@@ -1316,8 +1316,19 @@
 
       if (isImage(name)) {
         mediaPlayerWrapper.innerHTML = `
-          <div class="w-full h-full flex items-center justify-center p-1 bg-black overflow-hidden select-none">
-            <img src="${currentStreamUrl}" alt="${name}" class="max-h-[82vh] max-w-full w-auto h-auto object-contain shadow-2xl transition-transform duration-200">
+          <div class="w-full h-full min-h-[300px] flex items-center justify-center p-2 bg-black overflow-hidden select-none relative">
+            <div id="imageLoadingSpinner" class="absolute flex flex-col items-center justify-center text-zinc-400">
+              <i class="fa-solid fa-circle-notch fa-spin text-2xl text-brand mb-2"></i>
+              <span class="text-xs">Carregando imagem...</span>
+            </div>
+            <img src="${currentStreamUrl}" alt="${name}" 
+              onload="document.getElementById('imageLoadingSpinner')?.remove()" 
+              onerror="
+                this.style.display='none';
+                const spin = document.getElementById('imageLoadingSpinner');
+                if (spin) spin.innerHTML = '<div class=\'text-center p-4\'><i class=\'fa-solid fa-triangle-exclamation text-amber-500 text-3xl mb-2\'></i><p class=\'text-sm font-semibold text-zinc-200\'>Limite de transferência da conta MEGA atingido</p><p class=\'text-xs text-zinc-400 mt-1 max-w-sm\'>O servidor da MEGA bloqueou temporariamente os downloads para esta conta/IP (cota de transferência excedida). Tente novamente em alguns minutos ou use uma conta logada.</p></div>';
+              "
+              class="max-h-[82vh] max-w-full w-auto h-auto object-contain shadow-2xl transition-transform duration-200">
           </div>
         `;
       } else if (isPdf(name)) {
@@ -1385,6 +1396,21 @@
           ],
           seekTime: 10,
           speed: { selected: preferredSpeed, options: [0.5, 0.75, 1, 1.25, 1.5, 2] }
+        });
+
+        // Captura de erro do vídeo
+        video.addEventListener('error', () => {
+          mediaPlayerWrapper.innerHTML = `
+            <div class="text-center p-6 flex flex-col items-center justify-center">
+              <i class="fa-solid fa-triangle-exclamation text-amber-500 text-4xl mb-3"></i>
+              <p class="text-sm font-semibold text-zinc-200">Não foi possível reproduzir este vídeo</p>
+              <p class="text-xs text-zinc-400 mt-1 max-w-md">O limite de transferência da MEGA pode ter sido atingido para este IP/conta, ou o formato requer download direto.</p>
+              <button onclick="triggerDownload('${id}')" class="mt-4 px-4 py-2 bg-brand text-zinc-950 font-medium text-xs rounded-lg hover:bg-brand-hover transition flex items-center space-x-2">
+                <i class="fa-solid fa-download"></i>
+                <span>Tentar Baixar Diretamente</span>
+              </button>
+            </div>
+          `;
         });
 
         // Lembra velocidade preferida do usuário
