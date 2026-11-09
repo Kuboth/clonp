@@ -274,9 +274,9 @@ app.get('/api/stream/:id', streamLimiter, async (req, res) => {
       headers['Content-Range'] = `bytes ${start}-${end}/${fileSize}`;
       headers['Content-Length'] = chunkSize;
 
-      // Para requisições pequenas (frames de vídeo, miniaturas, headers), downloadBuffer responde de forma síncrona/imediata
+      // Para requisições pequenas (frames de vídeo, miniaturas, headers), entrega com callback confiável
       if (chunkSize <= 2 * 1024 * 1024) {
-        return file.downloadBuffer({ start, end }, (err, buf) => {
+        return file.download({ start, end }, (err, buf) => {
           if (err) {
             console.error('Buffer error:', err);
             if (!res.headersSent) res.status(500).end();
@@ -300,9 +300,9 @@ app.get('/api/stream/:id', streamLimiter, async (req, res) => {
       headers['Content-Length'] = fileSize;
     }
 
-    // Para imagens e arquivos pequenos (< 8MB), downloadBuffer entrega tudo em 1 único bloco sem travar em proxies/Cloudflare
+    // Para imagens e arquivos pequenos (< 8MB), entrega tudo em 1 único bloco com callback sem travar em proxies/Cloudflare
     if (fileSize && fileSize <= 8 * 1024 * 1024 && !isDownload) {
-      return file.downloadBuffer((err, buf) => {
+      return file.download({}, (err, buf) => {
         if (err) {
           console.error('Buffer download error:', err);
           if (!res.headersSent) res.status(500).end();
