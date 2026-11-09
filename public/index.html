@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Clonr Pro - Navegador de Pastas & Debrid MEGA</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: '#ef4444',
+            darkbg: '#0b1120',
+            darkcard: '#151f32'
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- FontAwesome & Plyr CSS -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
+
+  <style>
+    :root {
+      --plyr-color-main: #ef4444;
+    }
+
+    .plyr--video {
+      border-radius: 0.75rem;
+      overflow: hidden;
+    }
+  </style>
+</head>
+
+<body
+  class="bg-darkbg text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-brand selection:text-white">
+
+  <!-- Header -->
+  <header class="border-b border-slate-800 bg-slate-900/60 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div
+          class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand to-rose-400 flex items-center justify-center shadow-lg shadow-brand/20">
+          <i class="fa-solid fa-folder-tree text-white text-lg"></i>
+        </div>
+        <div>
+          <span class="font-extrabold text-xl tracking-tight text-white">Clonr<span
+              class="text-brand">.Pro</span></span>
+          <span class="text-[10px] bg-brand/20 text-brand px-1.5 py-0.5 rounded ml-1 font-semibold">EXPLORER</span>
+        </div>
+      </div>
+      <div class="flex items-center space-x-3 text-xs">
+        <div
+          class="flex items-center space-x-1.5 bg-slate-800/80 px-2.5 py-1 rounded-full border border-slate-700/60 text-slate-400">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>Navegação Hierárquica Ativa</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-6xl mx-auto px-4 py-8 flex-1 w-full space-y-6">
+
+    <!-- Input Box -->
+    <div class="bg-darkcard border border-slate-800 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+      <div class="absolute -right-10 -bottom-10 w-52 h-52 bg-brand/5 rounded-full blur-3xl pointer-events-none"></div>
+
+      <h1 class="text-2xl font-bold mb-4">Colar link MEGA</h1>
+
+      <form id="inspectForm" class="flex flex-col sm:flex-row gap-3">
+        <div class="relative flex-1">
+          <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+            <i class="fa-solid fa-link"></i>
+          </div>
+          <input type="url" id="urlInput" required
+            placeholder="https://mega.nz/folder/... ou https://mega.nz/file/...#chave"
+            class="w-full pl-10 pr-4 py-3 bg-slate-900/90 border border-slate-700 rounded-xl focus:border-brand focus:ring-1 focus:ring-brand focus:outline-none transition-all placeholder:text-slate-500 text-sm" />
+        </div>
+        <button type="submit" id="btnInspect"
+          class="px-6 py-3 bg-brand hover:bg-rose-600 text-white font-medium text-sm rounded-xl transition flex items-center justify-center space-x-2 shadow-lg shadow-brand/20 active:scale-95 cursor-pointer">
+          <i class="fa-solid fa-folder-open"></i>
+          <span>Explorar</span>
+        </button>
+      </form>
+
+      <!-- Erro -->
+      <div id="errorBox"
+        class="hidden mt-4 p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-sm flex items-start space-x-3">
+        <i class="fa-solid fa-triangle-exclamation mt-0.5"></i>
+        <div id="errorMessage"></div>
+      </div>
+    </div>
+
+    <!-- Spinner de carregamento -->
+    <div id="loadingBox" class="hidden flex-col items-center justify-center py-16 space-y-4">
+      <div class="w-12 h-12 border-4 border-slate-700 border-t-brand rounded-full animate-spin"></div>
+      <p class="text-slate-400 text-sm animate-pulse">Lendo estrutura de pastas e decodificando metadados...</p>
+    </div>
+
+    <!-- Resultados e Navegador -->
+    <div id="resultsBox" class="hidden space-y-4">
+
+      <!-- Barra Superior: Breadcrumbs, Ordenação e Busca -->
+      <div
+        class="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-900/70 p-4 rounded-xl border border-slate-800">
+
+        <!-- Breadcrumbs (Caminho de Navegação) -->
+        <nav id="breadcrumbs" class="flex flex-wrap items-center gap-1.5 text-xs text-slate-300 font-medium">
+          <!-- Início / Pasta ... -->
+        </nav>
+
+        <!-- Controles: Ordenar, Buscar e Baixar Tudo -->
+        <div class="flex flex-wrap items-center gap-2">
+
+          <!-- Dropdown "Ordenar por" (Fiel à imagem do MEGA) -->
+          <div class="relative">
+            <button id="sortMenuBtn"
+              class="px-3 py-1.5 bg-slate-800 hover:bg-slate-750 border border-slate-700/80 rounded-lg text-xs font-medium text-slate-200 transition inline-flex items-center space-x-1.5 cursor-pointer shadow-sm">
+              <i class="fa-solid fa-arrow-down-short-wide text-brand"></i>
+              <span id="currentSortLabel">Nome</span>
+              <i class="fa-solid fa-chevron-down text-[10px] text-slate-400 ml-1"></i>
+            </button>
+
+            <!-- Menu Popup Ordenar por -->
+            <div id="sortDropdown"
+              class="hidden absolute right-0 mt-2 w-48 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-40 py-2 divide-y divide-slate-800/60 font-sans">
+
+              <div class="px-3 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                Ordenar por
+              </div>
+
+              <div class="py-1 text-xs text-slate-200">
+                <button onclick="changeSort('name')"
+                  class="w-full px-3 py-2 text-left hover:bg-slate-800 flex items-center justify-between transition cursor-pointer">
+                  <span>Nome</span>
+                  <i id="check_name" class="fa-solid fa-check text-brand text-xs"></i>
+                </button>
+                <button onclick="changeSort('date_desc')"
+                  class="w-full px-3 py-2 text-left hover:bg-slate-800 flex items-center justify-between transition cursor-pointer">
+                  <span>Data de inclusão</span>
+                  <i id="check_date_desc" class="fa-solid fa-check text-brand text-xs hidden"></i>
+                </button>
+                <button onclick="changeSort('date_asc')"
+                  class="w-full px-3 py-2 text-left hover:bg-slate-800 flex items-center justify-between transition cursor-pointer">
+                  <span>Última alteração</span>
+                  <i id="check_date_asc" class="fa-solid fa-check text-brand text-xs hidden"></i>
+                </button>
+                <button onclick="changeSort('type')"
+                  class="w-full px-3 py-2 text-left hover:bg-slate-800 flex items-center justify-between transition cursor-pointer">
+                  <span>Tipo</span>
+                  <i id="check_type" class="fa-solid fa-check text-brand text-xs hidden"></i>
+                </button>
+                <button onclick="changeSort('size')"
+                  class="w-full px-3 py-2 text-left hover:bg-slate-800 flex items-center justify-between transition cursor-pointer">
+                  <span>Tamanho</span>
+                  <i id="check_size" class="fa-solid fa-check text-brand text-xs hidden"></i>
+                </button>
+                <button onclick="changeSort('duration')"
+                  class="w-full px-3 py-2 text-left hover:bg-slate-800 flex items-center justify-between transition cursor-pointer">
+                  <span>Duração / Extensão</span>
+                  <i id="check_duration" class="fa-solid fa-check text-brand text-xs hidden"></i>
+                </button>
+              </div>
+
+              <!-- Direção da Ordem (Crescente / Decrescente) -->
+              <div class="pt-1.5 px-3">
+                <button id="toggleDirectionBtn" onclick="toggleSortDirection()"
+                  class="w-full py-1 text-[11px] text-slate-400 hover:text-white flex items-center justify-between transition">
+                  <span id="directionLabel">Ordem: Crescente</span>
+                  <i id="directionIcon" class="fa-solid fa-arrow-up-a-z"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Filtro de Busca -->
+          <div class="relative w-44 sm:w-52">
+            <i class="fa-solid fa-filter absolute left-3 top-2.5 text-xs text-slate-500"></i>
+            <input type="text" id="filterInput" placeholder="Buscar nesta pasta..."
+              class="w-full pl-8 pr-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs focus:border-brand focus:outline-none placeholder:text-slate-600" />
+          </div>
+
+          <!-- Botão Baixar Tudo -->
+          <a id="btnDownloadAll" href="#"
+            class="hidden px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium transition items-center space-x-1.5 whitespace-nowrap shadow-sm">
+            <i class="fa-solid fa-file-zipper"></i>
+            <span>Baixar Tudo (.ZIP)</span>
+          </a>
+
+        </div>
+      </div>
+
+      <!-- Tabela / Lista de Itens da Pasta Atual -->
+      <div class="bg-darkcard border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-slate-900/80 text-xs uppercase tracking-wider text-slate-400 border-b border-slate-800">
+              <tr>
+                <th class="py-3 px-4">Nome</th>
+                <th class="py-3 px-4 w-36">Data</th>
+                <th class="py-3 px-4 w-28">Tamanho</th>
+                <th class="py-3 px-4 w-72 text-right">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="filesTableBody" class="divide-y divide-slate-800/60 font-mono text-xs">
+              <!-- Renderizado via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de Player de Mídia Avançado (Plyr) -->
+    <div id="mediaModal"
+      class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+      <div
+        class="bg-darkcard border border-slate-800 rounded-2xl max-w-4xl w-full p-4 relative shadow-2xl flex flex-col space-y-3">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div class="flex items-center space-x-2 truncate pr-4">
+            <span class="p-1 rounded bg-brand/20 text-brand text-xs font-bold uppercase">Streaming</span>
+            <h3 id="modalTitle" class="font-bold text-sm text-slate-200 truncate">Reproduzindo</h3>
+          </div>
+          <button id="closeModalBtn" class="text-slate-400 hover:text-white p-1 rounded-lg">
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+
+        <div id="mediaPlayerWrapper"
+          class="w-full bg-black rounded-xl overflow-hidden flex items-center justify-center min-h-[300px]">
+          <!-- Player injetado via JS -->
+        </div>
+
+        <div class="flex items-center justify-between pt-1 text-[11px] text-slate-400">
+          <span>Atalhos: <kbd class="bg-slate-800 px-1 rounded">Espaço</kbd> Pausar &bull; <kbd
+              class="bg-slate-800 px-1 rounded">F</kbd> Tela cheia &bull; <kbd
+              class="bg-slate-800 px-1 rounded">&larr;/&rarr;</kbd> Pular 10s</span>
+          <button id="modalVlcBtn"
+            class="text-orange-400 hover:text-orange-300 flex items-center space-x-1 cursor-pointer">
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+            <span>Abrir no VLC</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast de Notificação -->
+    <div id="toast"
+      class="hidden fixed bottom-6 right-6 bg-emerald-600 text-white px-4 py-2.5 rounded-xl shadow-xl text-xs flex items-center space-x-2 z-50">
+      <i class="fa-solid fa-check"></i>
+      <span id="toastMsg">Link copiado!</span>
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-slate-800/80 py-4 text-center text-xs text-slate-500">
+    Clonr Pro &bull; Ordenação Fiel ao MEGA &bull; Streaming Direto HTTP 206
+  </footer>
+
+  <!-- Plyr JS -->
+  <script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
+
+  <script>
+    const inspectForm = document.getElementById('inspectForm');
+    const urlInput = document.getElementById('urlInput');
+    const btnInspect = document.getElementById('btnInspect');
+    const loadingBox = document.getElementById('loadingBox');
+    const resultsBox = document.getElementById('resultsBox');
+    const errorBox = document.getElementById('errorBox');
+    const errorMessage = document.getElementById('errorMessage');
+    const filesTableBody = document.getElementById('filesTableBody');
+    const breadcrumbs = document.getElementById('breadcrumbs');
+    const filterInput = document.getElementById('filterInput');
+    const btnDownloadAll = document.getElementById('btnDownloadAll');
+
+    // Elementos de Ordenação
+    const sortMenuBtn = document.getElementById('sortMenuBtn');
+    const sortDropdown = document.getElementById('sortDropdown');
+    const currentSortLabel = document.getElementById('currentSortLabel');
+    const directionLabel = document.getElementById('directionLabel');
+    const directionIcon = document.getElementById('directionIcon');
+
+    const mediaModal = document.getElementById('mediaModal');
+    const modalTitle = document.getElementById('modalTitle');
+    const mediaPlayerWrapper = document.getElementById('mediaPlayerWrapper');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+    const modalVlcBtn = document.getElementById('modalVlcBtn');
+
+    let rootNode = null;
+    let currentFolderNode = null;
+    let pathStack = [];
+    let activePlyr = null;
+    let currentStreamUrl = '';
+
+    // Estado da Ordenação
+    let currentSortBy = 'name'; // 'name', 'date_desc', 'date_asc', 'type', 'size', 'duration'
+    let isAscending = true;
+
+    const sortLabels = {
+      name: 'Nome',
+      date_desc: 'Data de inclusão',
+      date_asc: 'Última alteração',
+      type: 'Tipo',
+      size: 'Tamanho',
+      duration: 'Duração'
+    };
+
+    // Toggle Dropdown
+    sortMenuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      sortDropdown.classList.toggle('hidden');
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!sortDropdown.contains(e.target) && !sortMenuBtn.contains(e.target)) {
+        sortDropdown.classList.add('hidden');
+      }
+    });
+
+    window.changeSort = (sortKey) => {
+      currentSortBy = sortKey;
+      currentSortLabel.textContent = sortLabels[sortKey];
+
+      // Atualiza marcas de check
+      Object.keys(sortLabels).forEach(key => {
+        const el = document.getElementById(`check_${key}`);
+        if (el) {
+          if (key === sortKey) el.classList.remove('hidden');
+          else el.classList.add('hidden');
+        }
+      });
+
+      sortDropdown.classList.add('hidden');
+      if (currentFolderNode) {
+        renderFolder(currentFolderNode, filterInput.value.trim());
+      }
+    };
+
+    window.toggleSortDirection = () => {
+      isAscending = !isAscending;
+      directionLabel.textContent = isAscending ? 'Ordem: Crescente' : 'Ordem: Decrescente';
+      directionIcon.className = isAscending ? 'fa-solid fa-arrow-up-a-z' : 'fa-solid fa-arrow-down-z-a';
+      if (currentFolderNode) {
+        renderFolder(currentFolderNode, filterInput.value.trim());
+      }
+    };
+
+    function sortItems(items) {
+      return [...items].sort((a, b) => {
+        // Pastas sempre no topo
+        if (a.isDirectory && !b.isDirectory) return -1;
+        if (!a.isDirectory && b.isDirectory) return 1;
+
+        let result = 0;
+        switch (currentSortBy) {
+          case 'name':
+            result = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+            break;
+          case 'date_desc': // Data de inclusão (mais recente primeiro por padrão)
+            result = (b.timestamp || 0) - (a.timestamp || 0);
+            break;
+          case 'date_asc': // Última alteração
+            result = (a.timestamp || 0) - (b.timestamp || 0);
+            break;
+          case 'type':
+            result = (a.extension || '').localeCompare(b.extension || '');
+            break;
+          case 'size':
+            result = (a.size || 0) - (b.size || 0);
+            break;
+          case 'duration':
+            result = (a.extension || '').localeCompare(b.extension || '');
+            break;
+          default:
+            result = a.name.localeCompare(b.name);
+        }
+
+        return isAscending ? result : -result;
+      });
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toastMsg').textContent = msg;
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 2500);
+    }
+
+    function getFileIcon(filename) {
+      const ext = filename.split('.').pop().toLowerCase();
+      if (['mp4', 'mkv', 'avi', 'mov', 'webm'].includes(ext)) return 'fa-file-video text-indigo-400';
+      if (['mp3', 'wav', 'flac', 'aac', 'ogg'].includes(ext)) return 'fa-file-audio text-purple-400';
+      if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) return 'fa-file-image text-emerald-400';
+      if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return 'fa-file-zipper text-amber-400';
+      if (['pdf'].includes(ext)) return 'fa-file-pdf text-rose-400';
+      if (['srt', 'vtt'].includes(ext)) return 'fa-closed-captioning text-yellow-400';
+      return 'fa-file text-slate-400';
+    }
+
+    function isMedia(filename) {
+      const ext = filename.split('.').pop().toLowerCase();
+      return ['mp4', 'webm', 'mp3', 'wav', 'ogg'].includes(ext);
+    }
+
+    inspectForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const url = urlInput.value.trim();
+      if (!url) return;
+
+      errorBox.classList.add('hidden');
+      resultsBox.classList.add('hidden');
+      btnDownloadAll.classList.add('hidden');
+      loadingBox.classList.remove('hidden');
+      btnInspect.disabled = true;
+
+      try {
+        const res = await fetch('/api/inspect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || 'Erro ao processar o link.');
+        }
+
+        rootNode = data.tree;
+        currentFolderNode = rootNode;
+        pathStack = [{ name: data.name || 'Início', node: rootNode }];
+
+        if (data.type === 'folder' && data.folderKey) {
+          btnDownloadAll.href = `/api/download-folder/${data.folderKey}`;
+          btnDownloadAll.classList.remove('hidden');
+          btnDownloadAll.classList.add('inline-flex');
+        }
+
+        renderBreadcrumbs();
+        renderFolder(currentFolderNode);
+        resultsBox.classList.remove('hidden');
+      } catch (err) {
+        errorMessage.textContent = err.message;
+        errorBox.classList.remove('hidden');
+      } finally {
+        loadingBox.classList.add('hidden');
+        btnInspect.disabled = false;
+      }
+    });
+
+    function renderBreadcrumbs() {
+      breadcrumbs.innerHTML = '';
+      pathStack.forEach((entry, index) => {
+        const isLast = index === pathStack.length - 1;
+        const item = document.createElement('div');
+        item.className = 'flex items-center space-x-1.5';
+
+        if (index > 0) {
+          const sep = document.createElement('span');
+          sep.className = 'text-slate-600';
+          sep.textContent = '/';
+          item.appendChild(sep);
+        }
+
+        if (isLast) {
+          const span = document.createElement('span');
+          span.className = 'text-slate-100 font-bold flex items-center space-x-1';
+          span.innerHTML = `<i class="fa-solid fa-folder-open text-brand text-xs"></i> <span>${entry.name}</span>`;
+          item.appendChild(span);
+        } else {
+          const btn = document.createElement('button');
+          btn.className = 'text-slate-400 hover:text-brand transition flex items-center space-x-1 cursor-pointer';
+          btn.innerHTML = `<i class="fa-solid fa-folder text-slate-500 text-xs"></i> <span>${entry.name}</span>`;
+          btn.onclick = () => {
+            pathStack = pathStack.slice(0, index + 1);
+            currentFolderNode = entry.node;
+            filterInput.value = '';
+            renderBreadcrumbs();
+            renderFolder(currentFolderNode);
+          };
+          item.appendChild(btn);
+        }
+
+        breadcrumbs.appendChild(item);
+      });
+    }
+
+    function renderFolder(folderNode, filterQuery = '') {
+      filesTableBody.innerHTML = '';
+      let children = folderNode.children || [];
+
+      if (filterQuery) {
+        const q = filterQuery.toLowerCase();
+        children = children.filter(c => c.name.toLowerCase().includes(q));
+      }
+
+      // Aplica o algoritmo de ordenação selecionado
+      children = sortItems(children);
+
+      // Linha de "Voltar"
+      if (pathStack.length > 1 && !filterQuery) {
+        const backTr = document.createElement('tr');
+        backTr.className = 'hover:bg-slate-800/40 transition-colors cursor-pointer text-slate-400';
+        backTr.onclick = () => {
+          pathStack.pop();
+          currentFolderNode = pathStack[pathStack.length - 1].node;
+          filterInput.value = '';
+          renderBreadcrumbs();
+          renderFolder(currentFolderNode);
+        };
+        backTr.innerHTML = `
+          <td colspan="4" class="py-2.5 px-4 font-sans text-xs flex items-center space-x-2 text-slate-400 hover:text-white">
+            <i class="fa-solid fa-arrow-turn-up text-brand"></i>
+            <span class="font-bold">.. (Voltar para pasta anterior)</span>
+          </td>
+        `;
+        filesTableBody.appendChild(backTr);
+      }
+
+      if (!children.length) {
+        const emptyTr = document.createElement('tr');
+        emptyTr.innerHTML = `<td colspan="4" class="py-8 text-center text-slate-500">Esta pasta está vazia.</td></tr>`;
+        filesTableBody.appendChild(emptyTr);
+        return;
+      }
+
+      children.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-800/40 transition-colors';
+
+        if (item.isDirectory) {
+          // Subpasta
+          tr.innerHTML = `
+            <td class="py-3 px-4 font-sans text-sm cursor-pointer" onclick="enterFolder('${item.id}')">
+              <div class="flex items-center space-x-3">
+                <i class="fa-solid fa-folder text-brand text-base"></i>
+                <div class="truncate max-w-xs sm:max-w-md font-semibold text-slate-100 hover:text-brand transition" title="${item.name}">
+                  ${item.name}
+                </div>
+              </div>
+            </td>
+            <td class="py-3 px-4 text-slate-500 whitespace-nowrap text-xs">${item.formattedDate || '-'}</td>
+            <td class="py-3 px-4 text-slate-500 whitespace-nowrap">${item.children ? item.children.length + ' item(ns)' : '-'}</td>
+            <td class="py-3 px-4 text-right whitespace-nowrap">
+              <button 
+                onclick="enterFolder('${item.id}')"
+                class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-sans transition inline-flex items-center space-x-1 cursor-pointer">
+                <i class="fa-solid fa-folder-open text-xs text-brand"></i>
+                <span>Abrir</span>
+              </button>
+            </td>
+          `;
+        } else {
+          // Arquivo
+          const iconClass = getFileIcon(item.name);
+          const canPlay = isMedia(item.name);
+          const fullStreamUrl = `${window.location.origin}/api/stream/${item.id}`;
+
+          tr.innerHTML = `
+            <td class="py-3 px-4 font-sans text-sm">
+              <div class="flex items-center space-x-3">
+                <i class="fa-solid ${iconClass} text-base"></i>
+                <div class="truncate max-w-xs sm:max-w-md text-slate-200" title="${item.name}">
+                  ${item.name}
+                  ${item.subtitleId ? '<span class="ml-2 text-[10px] bg-yellow-500/20 text-yellow-400 px-1 py-0.5 rounded font-mono">Legenda Auto</span>' : ''}
+                </div>
+              </div>
+            </td>
+            <td class="py-3 px-4 text-slate-400 whitespace-nowrap text-xs">${item.formattedDate || '-'}</td>
+            <td class="py-3 px-4 text-slate-400 whitespace-nowrap">${item.formattedSize}</td>
+            <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+              ${canPlay ? `
+                <button 
+                  onclick="openPlayer('${item.id}', '${encodeURIComponent(item.name)}', '${item.subtitleId || ''}')" 
+                  class="px-2.5 py-1.5 bg-brand hover:bg-rose-600 text-white rounded-lg text-xs font-sans transition inline-flex items-center space-x-1 shadow-sm cursor-pointer">
+                  <i class="fa-solid fa-play text-xs"></i>
+                  <span>Tocar</span>
+                </button>
+              ` : ''}
+
+              <button 
+                onclick="copyStreamLink('${fullStreamUrl}')" 
+                title="Copiar link direto para abrir no VLC ou PotPlayer"
+                class="px-2 py-1.5 bg-slate-800 hover:bg-slate-700 text-orange-400 hover:text-orange-300 rounded-lg text-xs font-sans transition inline-flex items-center space-x-1 border border-slate-700/60 cursor-pointer">
+                <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                <span>VLC</span>
+              </button>
+
+              <a 
+                href="/api/stream/${item.id}?download=1" 
+                download 
+                class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-sans transition inline-flex items-center space-x-1 border border-slate-700/60">
+                <i class="fa-solid fa-download text-xs"></i>
+                <span>Baixar</span>
+              </a>
+            </td>
+          `;
+        }
+
+        filesTableBody.appendChild(tr);
+      });
+    }
+
+    window.enterFolder = (folderId) => {
+      const targetFolder = (currentFolderNode.children || []).find(c => c.id === folderId);
+      if (targetFolder) {
+        pathStack.push({ name: targetFolder.name, node: targetFolder });
+        currentFolderNode = targetFolder;
+        filterInput.value = '';
+        renderBreadcrumbs();
+        renderFolder(currentFolderNode);
+      }
+    };
+
+    filterInput.addEventListener('input', (e) => {
+      renderFolder(currentFolderNode, e.target.value.trim());
+    });
+
+    window.copyStreamLink = (link) => {
+      navigator.clipboard.writeText(link).then(() => {
+        showToast('Link do stream copiado! Cole no VLC (Ctrl+N)');
+      });
+    };
+
+    window.openPlayer = (id, encodedName, subtitleId) => {
+      if (activePlyr) {
+        activePlyr.destroy();
+        activePlyr = null;
+      }
+
+      const name = decodeURIComponent(encodedName);
+      modalTitle.textContent = name;
+      const ext = name.split('.').pop().toLowerCase();
+      currentStreamUrl = `${window.location.origin}/api/stream/${id}`;
+
+      mediaPlayerWrapper.innerHTML = '';
+
+      if (['mp3', 'wav', 'ogg'].includes(ext)) {
+        const audio = document.createElement('audio');
+        audio.id = 'playerTarget';
+        audio.controls = true;
+        audio.innerHTML = `<source src="${currentStreamUrl}" type="audio/${ext === 'mp3' ? 'mpeg' : ext}">`;
+        mediaPlayerWrapper.appendChild(audio);
+
+        activePlyr = new Plyr('#playerTarget', {
+          controls: ['play', 'progress', 'current-time', 'duration', 'mute', 'volume']
+        });
+      } else {
+        const video = document.createElement('video');
+        video.id = 'playerTarget';
+        video.controls = true;
+        video.playsInline = true;
+
+        let tracksHtml = '';
+        if (subtitleId) {
+          tracksHtml = `<track kind="captions" label="Português / Legenda" src="/api/subtitles/${subtitleId}" srclang="pt" default>`;
+        }
+
+        video.innerHTML = `<source src="${currentStreamUrl}" type="video/mp4">${tracksHtml}`;
+        mediaPlayerWrapper.appendChild(video);
+
+        activePlyr = new Plyr('#playerTarget', {
+          controls: [
+            'play-large', 'play', 'progress', 'current-time', 'duration',
+            'mute', 'volume', 'captions', 'settings', 'pip', 'fullscreen'
+          ],
+          speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 2] }
+        });
+      }
+
+      mediaModal.classList.remove('hidden');
+    };
+
+    modalVlcBtn.addEventListener('click', () => {
+      if (currentStreamUrl) {
+        copyStreamLink(currentStreamUrl);
+      }
+    });
+
+    function closePlayer() {
+      if (activePlyr) {
+        activePlyr.destroy();
+        activePlyr = null;
+      }
+      mediaPlayerWrapper.innerHTML = '';
+      mediaModal.classList.add('hidden');
+    }
+
+    closeModalBtn.addEventListener('click', closePlayer);
+    mediaModal.addEventListener('click', (e) => {
+      if (e.target === mediaModal) closePlayer();
+    });
+  </script>
+</body>
+
+</html>
