@@ -246,7 +246,9 @@ app.get('/api/stream/:id', streamLimiter, async (req, res) => {
     };
 
     if (isDownload) {
-      headers['Content-Disposition'] = `attachment; filename="${encodeURIComponent(filename)}"`;
+      const asciiFilename = filename.replace(/[^\x20-\x7E]/g, '_');
+      headers['Content-Disposition'] = `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+      headers['Content-Type'] = 'application/octet-stream';
     } else {
       headers['Content-Disposition'] = `inline; filename="${encodeURIComponent(filename)}"`;
     }

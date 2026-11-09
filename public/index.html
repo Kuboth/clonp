@@ -615,6 +615,19 @@
       renderFolder(currentFolderNode);
     };
 
+    window.triggerDownload = (id) => {
+      const url = `/api/stream/${id}?download=1`;
+      let iframe = document.getElementById('downloadFrame');
+      if (!iframe) {
+        iframe = document.createElement('iframe');
+        iframe.id = 'downloadFrame';
+        iframe.name = 'downloadFrameTarget';
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+      }
+      iframe.src = url;
+    };
+
     window.downloadSelectedBatch = async () => {
       if (selectedItemIds.size === 0) {
         showToast('Nenhum arquivo selecionado.');
@@ -623,16 +636,6 @@
       showToast('Preparando download do pacote...');
       const ids = Array.from(selectedItemIds);
       
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = '/api/download-batch';
-      form.target = '_blank';
-
-      const input = document.createElement('input');
-      input.type = 'hidden';
-      input.name = 'payload';
-      
-      // Envia via fetch com blob download para manter seguro
       try {
         const res = await fetch('/api/download-batch', {
           method: 'POST',
@@ -644,8 +647,10 @@
         const a = document.createElement('a');
         a.href = url;
         a.download = 'selecao_clonp.zip';
+        document.body.appendChild(a);
         a.click();
-        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        setTimeout(() => window.URL.revokeObjectURL(url), 10000);
       } catch (err) {
         showToast('Erro ao baixar lote.');
       }
@@ -892,14 +897,13 @@
             </div>
 
             <div class="flex items-center pt-2 border-t border-slate-800/60 mt-1 justify-center" onclick="event.stopPropagation()">
-              <a 
-                href="/api/stream/${item.id}?download=1" 
-                download 
+              <button 
+                onclick="triggerDownload('${item.id}')"
                 title="Baixar"
                 class="w-full py-1.5 bg-slate-800 active:bg-slate-750 text-slate-300 hover:text-white border border-slate-700/70 rounded-lg text-[11px] font-medium transition flex items-center justify-center space-x-1">
                 <i class="fa-solid fa-download text-[10px]"></i>
                 <span>Baixar</span>
-              </a>
+              </button>
             </div>
           `;
         }
@@ -934,7 +938,7 @@
             if (canView) {
               openPlayer(item.id, encodeURIComponent(item.name), item.subtitleId || '');
             } else {
-              window.location.href = `/api/stream/${item.id}?download=1`;
+              triggerDownload(item.id);
             }
           };
 
@@ -968,12 +972,11 @@
             </div>
 
             <div onclick="event.stopPropagation()">
-              <a 
-                href="/api/stream/${item.id}?download=1" 
-                download 
+              <button 
+                onclick="triggerDownload('${item.id}')"
                 class="p-2 bg-slate-800/80 active:bg-slate-750 text-slate-400 hover:text-white rounded-lg text-xs font-medium transition inline-flex items-center justify-center">
                 <i class="fa-solid fa-download text-xs"></i>
-              </a>
+              </button>
             </div>
           `;
         }
@@ -1079,7 +1082,10 @@
 
       const modalDownloadBtn = document.getElementById('modalDownloadBtn');
       if (modalDownloadBtn) {
-        modalDownloadBtn.href = `${currentStreamUrl}?download=1`;
+        modalDownloadBtn.onclick = (e) => {
+          e.preventDefault();
+          triggerDownload(id);
+        };
       }
 
       mediaPlayerWrapper.innerHTML = '';
