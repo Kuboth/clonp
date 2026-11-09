@@ -1,6 +1,47 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
-  <rect width="192" height="192" rx="40" fill="#0b1120"/>
-  <circle cx="96" cy="96" r="65" fill="#ef4444"/>
-  <path d="M66 96l24 24 36-40" stroke="#ffffff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <!-- Gradiente de Fundo Profundo Zinc-950 -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#18181b"/>
+      <stop offset="50%" stop-color="#09090b"/>
+      <stop offset="100%" stop-color="#040405"/>
+    </linearGradient>
 
+    <!-- Gradiente do Raio (Vermelho Coral para Laranja Intenso) -->
+    <linearGradient id="boltGrad" x1="0%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#ff4d4d"/>
+      <stop offset="60%" stop-color="#ef4444"/>
+      <stop offset="100%" stop-color="#dc2626"/>
+    </linearGradient>
+
+    <!-- Brilho Neon Sutil -->
+    <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="16" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+
+    <!-- Gradiente de Borda Metálica Sutil -->
+    <linearGradient id="borderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3f3f46" stop-opacity="0.8"/>
+      <stop offset="50%" stop-color="#27272a" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#18181b" stop-opacity="0.8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Fundo com cantos arredondados padrão de ícone de app (squircle) -->
+  <rect width="512" height="512" rx="115" fill="url(#bgGrad)"/>
+  <rect width="508" height="508" x="2" y="2" rx="113" fill="none" stroke="url(#borderGrad)" stroke-width="4"/>
+
+  <!-- Halo de Luz de Fundo para o Raio -->
+  <circle cx="256" cy="256" r="140" fill="#ef4444" opacity="0.12" filter="blur(30px)"/>
+
+  <!-- Símbolo do Raio Clonp (Debrid & Velocidade) -->
+  <g filter="url(#neonGlow)">
+    <path d="M285 75 L155 275 L245 275 L225 435 L365 235 L275 235 Z"
+          fill="url(#boltGrad)"
+          stroke="#ffffff"
+          stroke-opacity="0.15"
+          stroke-width="3"
+          stroke-linejoin="round"/>
+  </g>
+</svg>
