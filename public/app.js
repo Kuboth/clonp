@@ -515,12 +515,16 @@
         cleanup();
       };
 
-      video.addEventListener('loadeddata', () => {
-        if (video.duration && !isNaN(video.duration)) {
-          video.currentTime = Math.min(1.0, video.duration * 0.1);
+      video.addEventListener('loadedmetadata', () => {
+        if (video.duration && !isNaN(video.duration) && video.duration > 0.5) {
+          video.currentTime = Math.min(0.5, video.duration * 0.05);
         } else {
           captureFrame();
         }
+      }, { once: true });
+
+      video.addEventListener('loadeddata', () => {
+        captureFrame();
       }, { once: true });
 
       video.addEventListener('seeked', () => {

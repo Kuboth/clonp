@@ -56,7 +56,7 @@ const inspectLimiter = rateLimit({
 
 const streamLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
-  max: 600, // Permite múltiplos chunks para streams e Range requests
+  max: 3000, // Alto limite para acomodar requisições de miniaturas e múltiplos chunks de streaming
   standardHeaders: true,
   legacyHeaders: false
 });
