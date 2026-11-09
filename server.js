@@ -251,6 +251,17 @@ app.get('/api/stream/:id', streamLimiter, async (req, res) => {
       headers['Content-Disposition'] = `inline; filename="${encodeURIComponent(filename)}"`;
     }
 
+    // Opções de aceleração e paralelismo de download
+    const downloadOptions = isDownload ? {
+      maxConnections: 8,          // Dobra o número de conexões paralelas ao MEGA (padrão é 4)
+      initialChunkSize: 262144,   // Inicia com chunks maiores (256 KB em vez de 128 KB)
+      chunkSizeIncrement: 262144, // Acelera o crescimento do buffer mais rápido
+      maxChunkSize: 1048576       // Limite máximo de 1 MB por bloco
+    } : {
+      maxConnections: 4,          // Para streaming de vídeo, mantém 4 para evitar buffer underrun
+      initialChunkSize: 131072
+    };
+
     const range = req.headers.range;
     if (range && fileSize) {
       const parts = range.replace(/bytes=/, '').split('-');
@@ -262,7 +273,7 @@ app.get('/api/stream/:id', streamLimiter, async (req, res) => {
       headers['Content-Length'] = chunkSize;
       res.writeHead(206, headers);
 
-      const downloadStream = file.download({ start, end });
+      const downloadStream = file.download({ start, end, ...downloadOptions });
       downloadStream.on('error', (err) => {
         console.error('Stream error:', err);
         if (!res.headersSent) res.status(500).end();
@@ -275,7 +286,7 @@ app.get('/api/stream/:id', streamLimiter, async (req, res) => {
     }
     res.writeHead(200, headers);
 
-    const downloadStream = file.download();
+    const downloadStream = file.download(downloadOptions);
     downloadStream.on('error', (err) => {
       console.error('Stream error:', err);
       if (!res.headersSent) res.status(500).end();
