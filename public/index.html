@@ -1097,12 +1097,13 @@
           controls: ['play', 'progress', 'current-time', 'duration', 'mute', 'volume']
         });
       } else {
-        // Player de Vídeo Otimizado com Preload Agressivo e Retomada de Posição
+        // Player de Vídeo com Autoplay Imediato e Retomada de Posição
         const video = document.createElement('video');
         video.id = 'playerTarget';
         video.controls = true;
+        video.autoplay = true;
         video.playsInline = true;
-        video.preload = 'auto'; // Força o navegador a puxar o buffer inicial imediatamente
+        video.preload = 'auto';
         video.className = 'w-full max-h-[82vh] object-contain';
 
         let tracksHtml = '';
@@ -1121,11 +1122,17 @@
         mediaPlayerWrapper.appendChild(video);
 
         activePlyr = new Plyr('#playerTarget', {
+          autoplay: true, // Força início imediato
           controls: [
             'play-large', 'play', 'progress', 'current-time', 'duration', 
             'mute', 'volume', 'captions', 'settings', 'pip', 'fullscreen'
           ],
           speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 2] }
+        });
+
+        // Disparo imediato de reprodução assim que tiver dados prontos
+        activePlyr.on('canplay', () => {
+          activePlyr.play().catch(() => {});
         });
 
         // Lembrar última posição assistida
@@ -1137,6 +1144,7 @@
             activePlyr.currentTime = parseFloat(savedTime);
             showToast(`Retomando aos ${Math.floor(parseFloat(savedTime) / 60)}m${Math.floor(parseFloat(savedTime) % 60)}s`);
           }
+          activePlyr.play().catch(() => {});
         });
 
         activePlyr.on('timeupdate', () => {
