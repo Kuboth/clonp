@@ -826,18 +826,15 @@
                   </div>
                 </div>`;
             } else if (isVid) {
-              // Miniatura de vídeo real usando captura do primeiro segundo (#t=0.5) sem sobreposição de botão play
+              // Poster ultraleve em SVG e CSS: Zero conexões com o servidor, zero consumo de banda!
               thumbnailHtml = `
-                <div class="w-full h-28 rounded-xl overflow-hidden bg-slate-950 border border-slate-800/80 flex items-center justify-center mb-2 relative group-hover:border-slate-700 transition">
-                  <video 
-                    src="${fullStreamUrl}#t=0.5" 
-                    preload="metadata" 
-                    muted 
-                    playsinline 
-                    class="w-full h-full object-cover pointer-events-none"
-                  ></video>
+                <div class="w-full h-28 rounded-xl overflow-hidden bg-gradient-to-tr from-slate-950 via-slate-900 to-indigo-950/40 border border-slate-800/80 flex flex-col items-center justify-center mb-2 relative group-hover:border-slate-700 transition">
+                  <div class="w-11 h-11 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mb-1 group-hover:scale-110 transition">
+                    <i class="fa-solid fa-film text-xl"></i>
+                  </div>
+                  <span class="text-[9px] text-slate-400 uppercase font-mono tracking-wider">${item.extension || 'VIDEO'}</span>
                   <div class="absolute bottom-1.5 right-1.5 bg-black/60 backdrop-blur-sm p-1 rounded-md text-[9px] text-indigo-400 leading-none">
-                    <i class="fa-solid fa-video"></i>
+                    <i class="fa-solid fa-play"></i>
                   </div>
                 </div>`;
             } else if (isPdf(item.name)) {

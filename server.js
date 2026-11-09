@@ -251,17 +251,15 @@ app.get('/api/stream/:id', streamLimiter, async (req, res) => {
       headers['Content-Disposition'] = `inline; filename="${encodeURIComponent(filename)}"`;
     }
 
-    // Opções de aceleração para Streaming de Vídeo vs Download
+    // Opções de aceleração e paralelismo
     const downloadOptions = isDownload ? {
-      maxConnections: 8,          // Dobra o número de conexões paralelas ao MEGA (padrão é 4)
-      initialChunkSize: 262144,   // Inicia com chunks de 256 KB
-      chunkSizeIncrement: 262144, // Acelera o crescimento do buffer mais rápido
-      maxChunkSize: 1048576       // Limite máximo de 1 MB por bloco
-    } : {
-      maxConnections: 6,          // 6 conexões paralelas para encher o buffer do vídeo muito mais rápido
-      initialChunkSize: 524288,   // Começa com 512 KB logo no primeiro request (play instantâneo sem congelar)
-      chunkSizeIncrement: 262144,
+      maxConnections: 4,          // 4 conexões estáveis padrão do MEGA (evita congestionamento no Render free)
+      initialChunkSize: 131072,
+      chunkSizeIncrement: 131072,
       maxChunkSize: 1048576
+    } : {
+      maxConnections: 4,          // Para streaming
+      initialChunkSize: 262144
     };
 
     const range = req.headers.range;
