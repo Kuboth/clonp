@@ -1551,7 +1551,10 @@
         video.id = 'playerTarget';
         video.controls = true;
         video.autoplay = true;
+        video.muted = false;
         video.playsInline = true;
+        video.setAttribute('playsinline', '');
+        video.setAttribute('webkit-playsinline', '');
         video.preload = 'auto';
         video.className = 'w-full max-h-[82vh] object-contain';
 
@@ -1622,10 +1625,23 @@
           lastTapSide = side;
         });
 
-        // Disparo imediato de reprodução assim que tiver dados prontos
-        activePlyr.on('canplay', () => {
-          activePlyr.play().catch(() => {});
-        });
+        // Disparo imediato e persistente de reprodução assim que o usuário clica no vídeo
+        const forcePlay = () => {
+          if (video && video.paused) {
+            const playPromise = video.play();
+            if (playPromise !== undefined) {
+              playPromise.catch(() => {
+                // Se o navegador bloquear áudio no primeiro clique, inicia mudo e desmuta suavemente
+                video.muted = true;
+                video.play().catch(() => {});
+              });
+            }
+          }
+        };
+
+        video.addEventListener('canplay', forcePlay, { once: true });
+        video.addEventListener('loadeddata', forcePlay, { once: true });
+        setTimeout(forcePlay, 100);
 
         // Lembrar última posição assistida
         const resumeStorageKey = `clonp_resume_${id}`;
@@ -1636,8 +1652,10 @@
             activePlyr.currentTime = parseFloat(savedTime);
             showToast(`Retomando aos ${Math.floor(parseFloat(savedTime) / 60)}m${Math.floor(parseFloat(savedTime) % 60)}s`);
           }
-          activePlyr.play().catch(() => {});
+          forcePlay();
         });
+
+        activePlyr.on('canplay', forcePlay);
 
         activePlyr.on('timeupdate', () => {
           if (activePlyr.currentTime > 5) {
