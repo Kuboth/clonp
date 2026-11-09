@@ -278,8 +278,8 @@ app.get('/api/stream/:id', streamLimiter, async (req, res) => {
       if (chunkSize <= 2 * 1024 * 1024) {
         return file.download({ start, end }, (err, buf) => {
           if (err) {
-            console.error('Buffer error:', err);
-            if (!res.headersSent) res.status(500).end();
+            console.error('Buffer error (range):', err);
+            if (!res.headersSent) res.status(500).json({ error: 'Erro no buffer range: ' + (err.message || err) });
             return;
           }
           res.writeHead(206, headers);
@@ -291,7 +291,7 @@ app.get('/api/stream/:id', streamLimiter, async (req, res) => {
       const downloadStream = file.download({ start, end });
       downloadStream.on('error', (err) => {
         console.error('Stream error:', err);
-        if (!res.headersSent) res.status(500).end();
+        if (!res.headersSent) res.status(500).json({ error: 'Stream error: ' + (err.message || err) });
       });
       return downloadStream.pipe(res);
     }
@@ -305,7 +305,7 @@ app.get('/api/stream/:id', streamLimiter, async (req, res) => {
       return file.download({}, (err, buf) => {
         if (err) {
           console.error('Buffer download error:', err);
-          if (!res.headersSent) res.status(500).end();
+          if (!res.headersSent) res.status(500).json({ error: 'Erro no buffer download: ' + (err.message || err) });
           return;
         }
         res.writeHead(200, headers);
@@ -317,14 +317,14 @@ app.get('/api/stream/:id', streamLimiter, async (req, res) => {
     const downloadStream = file.download();
     downloadStream.on('error', (err) => {
       console.error('Stream error:', err);
-      if (!res.headersSent) res.status(500).end();
+      if (!res.headersSent) res.status(500).json({ error: 'Stream full error: ' + (err.message || err) });
     });
     downloadStream.pipe(res);
 
   } catch (err) {
     console.error('Erro no stream:', err);
     if (!res.headersSent) {
-      res.status(500).json({ error: 'Falha no download/stream do arquivo.' });
+      res.status(500).json({ error: 'Falha no download/stream: ' + (err.message || err) });
     }
   }
 });
