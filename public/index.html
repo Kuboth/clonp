@@ -248,12 +248,8 @@
           <!-- Player injetado via JS -->
         </div>
 
-        <div class="flex items-center justify-between pt-1 text-xs">
-          <span class="text-slate-400 text-[11px]">Stream Contínuo HTTP</span>
-          <button id="modalVlcBtn" class="text-orange-400 active:text-orange-300 flex items-center space-x-1.5 py-1 px-2.5 rounded-lg bg-slate-800/60 border border-slate-700/50">
-            <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
-            <span>Copiar Link VLC</span>
-          </button>
+        <div class="flex items-center justify-end pt-1 text-xs">
+          <span class="text-slate-500 text-[11px]">Stream Contínuo HTTP</span>
         </div>
       </div>
     </div>
@@ -292,7 +288,6 @@
     const modalTitle = document.getElementById('modalTitle');
     const mediaPlayerWrapper = document.getElementById('mediaPlayerWrapper');
     const closeModalBtn = document.getElementById('closeModalBtn');
-    const modalVlcBtn = document.getElementById('modalVlcBtn');
 
     let rootNode = null;
     let currentFolderNode = null;
@@ -649,28 +644,20 @@
                 </div>
               </div>
 
-              <div class="flex items-center gap-1.5 pt-1 border-t border-slate-800/60 justify-end">
+              <div class="flex items-center gap-2 pt-1 border-t border-slate-800/60 justify-end">
                 ${canPlay ? `
                   <button 
                     onclick="openPlayer('${item.id}', '${encodeURIComponent(item.name)}', '${item.subtitleId || ''}')" 
-                    class="flex-1 sm:flex-none px-3 py-2 bg-brand active:bg-rose-600 text-white rounded-lg text-xs font-medium transition inline-flex items-center justify-center space-x-1.5 touch-target shadow-sm">
+                    class="flex-1 sm:flex-none px-3.5 py-2 bg-brand active:bg-rose-600 text-white rounded-lg text-xs font-medium transition inline-flex items-center justify-center space-x-1.5 touch-target shadow-sm">
                     <i class="fa-solid fa-play text-xs"></i>
                     <span>Assistir</span>
                   </button>
                 ` : ''}
 
-                <button 
-                  onclick="copyStreamLink('${fullStreamUrl}')" 
-                  title="Copiar link VLC"
-                  class="px-3 py-2 bg-slate-900 border border-slate-700/80 active:bg-slate-800 text-orange-400 rounded-lg text-xs font-medium transition inline-flex items-center justify-center space-x-1 touch-target">
-                  <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i>
-                  <span>VLC</span>
-                </button>
-
                 <a 
                   href="/api/stream/${item.id}?download=1" 
                   download 
-                  class="flex-1 sm:flex-none px-3 py-2 bg-slate-800 active:bg-slate-750 text-slate-200 border border-slate-700/70 rounded-lg text-xs font-medium transition inline-flex items-center justify-center space-x-1.5 touch-target">
+                  class="flex-1 sm:flex-none px-3.5 py-2 bg-slate-800 active:bg-slate-750 text-slate-200 border border-slate-700/70 rounded-lg text-xs font-medium transition inline-flex items-center justify-center space-x-1.5 touch-target">
                   <i class="fa-solid fa-download text-xs"></i>
                   <span>Baixar</span>
                 </a>
@@ -748,12 +735,6 @@
 
       mediaModal.classList.remove('hidden');
     };
-
-    modalVlcBtn.addEventListener('click', () => {
-      if (currentStreamUrl) {
-        copyStreamLink(currentStreamUrl);
-      }
-    });
 
     function closePlayer() {
       if (activePlyr) {
