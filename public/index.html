@@ -830,9 +830,10 @@
       }
     });
 
-    // Fila sequencial e controlada para gerar miniaturas de vídeo com cache em 2 camadas (LRU em RAM + IndexedDB permanente)
+    // Fila concorrente controlada para gerar miniaturas de vídeo com cache em 2 camadas (LRU em RAM + IndexedDB permanente)
     const videoThumbQueue = [];
-    let isProcessingVideoThumb = false;
+    const MAX_CONCURRENT_VIDEO_THUMBS = 2; // Processa 2 vídeos por vez sem travar conexões
+    let activeVideoThumbWorkers = 0;
     const videoThumbCache = new Map(); // Camada 1: RAM (LRU)
     const imgThumbCache = new Map();   // Cache de imagens em RAM
 
@@ -919,9 +920,9 @@
 
         // 3. Se não tem em nenhum dos caches, adiciona na fila de geração client-side
         videoThumbQueue.push({ videoId, container });
-        processNextVideoThumb();
+        scheduleNextVideoThumbs();
       });
-    }, { rootMargin: '120px' });
+    }, { rootMargin: '300px' });
 
     function applyVideoThumb(container, dataUrl, isVertical = false) {
       const badgeHtml = isVertical 
@@ -939,15 +940,21 @@
       `;
     }
 
+    function scheduleNextVideoThumbs() {
+      while (activeVideoThumbWorkers < MAX_CONCURRENT_VIDEO_THUMBS && videoThumbQueue.length > 0) {
+        processNextVideoThumb();
+      }
+    }
+
     function processNextVideoThumb() {
-      if (isProcessingVideoThumb || videoThumbQueue.length === 0) return;
-      isProcessingVideoThumb = true;
+      if (videoThumbQueue.length === 0) return;
+      activeVideoThumbWorkers++;
 
       const { videoId, container } = videoThumbQueue.shift();
       const video = document.createElement('video');
       video.muted = true;
       video.playsInline = true;
-      video.preload = 'auto';
+      video.preload = 'metadata';
 
       let cleanedUp = false;
       const cleanup = () => {
@@ -956,11 +963,11 @@
         video.src = '';
         video.load();
         video.remove();
-        isProcessingVideoThumb = false;
-        setTimeout(processNextVideoThumb, 40);
+        activeVideoThumbWorkers--;
+        setTimeout(scheduleNextVideoThumbs, 30);
       };
 
-      const timeout = setTimeout(cleanup, 5000);
+      const timeout = setTimeout(cleanup, 6000);
 
       const captureFrame = () => {
         try {
@@ -987,7 +994,7 @@
           
           const cachePayload = { thumbUrl, isVertical };
 
-          if (videoThumbCache.size > 150) {
+          if (videoThumbCache.size > 200) {
             const firstKey = videoThumbCache.keys().next().value;
             videoThumbCache.delete(firstKey);
           }
@@ -1061,7 +1068,7 @@
       breadcrumbs.scrollLeft = breadcrumbs.scrollWidth;
     }
 
-    let renderedItemsLimit = 40; // Renderiza os primeiros 40 arquivos para carga instantânea
+    let renderedItemsLimit = 500; // Renderiza os itens para garantir que a galeria e miniaturas fiquem disponíveis
     let currentFolderChildren = [];
 
     // Scroll infinito para carregar mais itens suavemente sem travar o celular
@@ -1086,7 +1093,7 @@
       fileListContainer.innerHTML = '';
       currentFolderChildren = folderNode.children || [];
       currentFolderChildren = sortItems(currentFolderChildren);
-      renderedItemsLimit = 40;
+      renderedItemsLimit = 500;
 
       // Atualiza lista de itens visualizáveis para a galeria swipe
       viewableItemsList = currentFolderChildren.filter(c => !c.isDirectory && isViewable(c.name));
