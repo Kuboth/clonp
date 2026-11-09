@@ -329,7 +329,8 @@
 
   </main>
 
-  <!-- Plyr JS & StreamSaver.js -->
+  <!-- Plyr JS, StreamSaver.js & idb-keyval -->
+  <script src="https://cdn.jsdelivr.net/npm/idb-keyval@6/dist/iife.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/streamsaver@2.0.6/StreamSaver.min.js"></script>
   <script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
 
@@ -714,13 +715,13 @@
       }
     });
 
-    // Fila sequencial e controlada para gerar miniaturas de vídeo sob demanda (1 por vez)
+    // Fila sequencial e controlada para gerar miniaturas de vídeo com cache em 2 camadas (LRU em RAM + IndexedDB permanente)
     const videoThumbQueue = [];
     let isProcessingVideoThumb = false;
-    const videoThumbCache = new Map();
+    const videoThumbCache = new Map(); // Camada 1: RAM (LRU)
 
     const videoThumbObserver = new IntersectionObserver((entries, observer) => {
-      entries.forEach(entry => {
+      entries.forEach(async (entry) => {
         if (!entry.isIntersecting) return;
         const container = entry.target;
         observer.unobserve(container);
@@ -728,16 +729,29 @@
         const videoId = container.dataset.videoId;
         if (!videoId) return;
 
-        // Se já temos a miniatura no cache da sessão, aplica direto
+        // 1. Verifica no Cache de Memória RAM (0ms)
         if (videoThumbCache.has(videoId)) {
           applyVideoThumb(container, videoThumbCache.get(videoId));
           return;
         }
 
+        // 2. Verifica no Armazenamento Permanente IndexedDB (idb-keyval)
+        try {
+          if (window.idbKeyval) {
+            const cachedDbThumb = await idbKeyval.get(`thumb_${videoId}`);
+            if (cachedDbThumb) {
+              videoThumbCache.set(videoId, cachedDbThumb);
+              applyVideoThumb(container, cachedDbThumb);
+              return;
+            }
+          }
+        } catch (e) {}
+
+        // 3. Se não tem em nenhum dos caches, adiciona na fila de geração client-side
         videoThumbQueue.push({ videoId, container });
         processNextVideoThumb();
       });
-    }, { rootMargin: '100px' });
+    }, { rootMargin: '120px' });
 
     function applyVideoThumb(container, dataUrl) {
       container.innerHTML = `
@@ -764,13 +778,14 @@
         video.load();
         video.remove();
         isProcessingVideoThumb = false;
-        setTimeout(processNextVideoThumb, 80); // Pequeno intervalo para liberar CPU/Render
+        setTimeout(processNextVideoThumb, 60); // Pequeno intervalo para fluidez do navegador
       };
 
       const timeout = setTimeout(cleanup, 4500); // 4.5s max para não travar a fila
 
       video.addEventListener('loadeddata', () => {
-        video.currentTime = Math.min(1.0, (video.duration || 10) / 4);
+        // Pula para 10% da duração ou 1.5s para evitar telas pretas iniciais
+        video.currentTime = Math.min(2.0, (video.duration || 10) * 0.15);
       }, { once: true });
 
       video.addEventListener('seeked', () => {
@@ -781,7 +796,19 @@
           const ctx = canvas.getContext('2d');
           ctx.drawImage(video, 0, 0, 240, 135);
           const thumbUrl = canvas.toDataURL('image/jpeg', 0.65);
+          
+          // Salva na memória RAM
+          if (videoThumbCache.size > 150) {
+            const firstKey = videoThumbCache.keys().next().value;
+            videoThumbCache.delete(firstKey);
+          }
           videoThumbCache.set(videoId, thumbUrl);
+
+          // Salva no IndexedDB de forma persistente
+          if (window.idbKeyval) {
+            idbKeyval.set(`thumb_${videoId}`, thumbUrl).catch(() => {});
+          }
+
           applyVideoThumb(container, thumbUrl);
         } catch (e) {}
         clearTimeout(timeout);
