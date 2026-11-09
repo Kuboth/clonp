@@ -419,9 +419,23 @@
       return 'fa-file text-slate-400';
     }
 
-    function isMedia(filename) {
+    function isViewable(filename) {
       const ext = filename.split('.').pop().toLowerCase();
-      return ['mp4', 'webm', 'mp3', 'wav', 'ogg'].includes(ext);
+      return ['mp4', 'mkv', 'webm', 'mov', 'avi', 'mp3', 'wav', 'ogg', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'pdf', 'txt', 'log'].includes(ext);
+    }
+
+    function isImage(filename) {
+      const ext = filename.split('.').pop().toLowerCase();
+      return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext);
+    }
+
+    function isPdf(filename) {
+      return filename.toLowerCase().endsWith('.pdf');
+    }
+
+    function isAudio(filename) {
+      const ext = filename.split('.').pop().toLowerCase();
+      return ['mp3', 'wav', 'ogg'].includes(ext);
     }
 
     inspectForm.addEventListener('submit', async (e) => {
@@ -555,7 +569,8 @@
       children.forEach(item => {
         const card = document.createElement('div');
         const iconClass = getFileIcon(item.name);
-        const canPlay = isMedia(item.name);
+        const canView = isViewable(item.name);
+        const isImg = isImage(item.name);
         const fullStreamUrl = `${window.location.origin}/api/stream/${item.id}`;
 
         if (currentViewMode === 'grid') {
@@ -575,24 +590,31 @@
               </div>
             `;
           } else {
+            // Se for imagem, exibe miniatura direta
+            const thumbnailHtml = isImg 
+              ? `<div class="w-full h-24 rounded-xl overflow-hidden bg-slate-900 border border-slate-800 flex items-center justify-center mb-1.5 cursor-pointer" onclick="openPlayer('${item.id}', '${encodeURIComponent(item.name)}', '')">
+                   <img src="${fullStreamUrl}" alt="${item.name}" loading="lazy" class="w-full h-full object-cover">
+                 </div>`
+              : `<div class="w-11 h-11 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center mb-1.5 flex-shrink-0 cursor-pointer" onclick="${canView ? `openPlayer('${item.id}', '${encodeURIComponent(item.name)}', '${item.subtitleId || ''}')` : ''}">
+                   <i class="fa-solid ${iconClass} text-lg"></i>
+                 </div>`;
+
             card.innerHTML = `
-              <div class="flex flex-col items-center text-center py-1.5 flex-1 justify-center min-w-0">
-                <div class="w-11 h-11 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center mb-1.5 flex-shrink-0">
-                  <i class="fa-solid ${iconClass} text-lg"></i>
-                </div>
+              <div class="flex flex-col items-center text-center py-1 flex-1 justify-center min-w-0">
+                ${thumbnailHtml}
                 <div class="font-medium text-[11px] text-slate-200 line-clamp-2 w-full break-words leading-tight" title="${item.name}">${item.name}</div>
                 <div class="text-[10px] text-slate-400 font-mono mt-1">${item.formattedSize}</div>
               </div>
 
               <!-- Ações do Card em Grade -->
               <div class="flex items-center gap-1 pt-2 border-t border-slate-800/60 mt-1 justify-center">
-                ${canPlay ? `
+                ${canView ? `
                   <button 
                     onclick="openPlayer('${item.id}', '${encodeURIComponent(item.name)}', '${item.subtitleId || ''}')" 
-                    title="Assistir"
+                    title="Visualizar"
                     class="flex-1 py-1.5 bg-brand active:bg-rose-600 text-white rounded-lg text-[11px] font-medium transition flex items-center justify-center space-x-1">
-                    <i class="fa-solid fa-play text-[10px]"></i>
-                    <span>Ver</span>
+                    <i class="fa-solid fa-eye text-[10px]"></i>
+                    <span>Abrir</span>
                   </button>
                 ` : ''}
 
@@ -630,11 +652,17 @@
               </div>
             `;
           } else {
+            const previewIconOrThumb = isImg 
+              ? `<div class="w-10 h-10 rounded-xl overflow-hidden bg-slate-900 border border-slate-800 flex-shrink-0 cursor-pointer" onclick="openPlayer('${item.id}', '${encodeURIComponent(item.name)}', '')">
+                   <img src="${fullStreamUrl}" alt="${item.name}" loading="lazy" class="w-full h-full object-cover">
+                 </div>`
+              : `<div class="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center flex-shrink-0 mt-0.5 cursor-pointer" onclick="${canView ? `openPlayer('${item.id}', '${encodeURIComponent(item.name)}', '${item.subtitleId || ''}')` : ''}">
+                   <i class="fa-solid ${iconClass} text-sm"></i>
+                 </div>`;
+
             card.innerHTML = `
               <div class="flex items-start space-x-3 min-w-0">
-                <div class="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <i class="fa-solid ${iconClass} text-sm"></i>
-                </div>
+                ${previewIconOrThumb}
                 <div class="min-w-0 flex-1">
                   <div class="font-medium text-xs sm:text-sm text-slate-200 break-words leading-tight">${item.name}</div>
                   <div class="flex items-center space-x-2 mt-1 text-[11px] text-slate-400 font-mono">
@@ -645,12 +673,12 @@
               </div>
 
               <div class="flex items-center gap-2 pt-1 border-t border-slate-800/60 justify-end">
-                ${canPlay ? `
+                ${canView ? `
                   <button 
                     onclick="openPlayer('${item.id}', '${encodeURIComponent(item.name)}', '${item.subtitleId || ''}')" 
                     class="flex-1 sm:flex-none px-3.5 py-2 bg-brand active:bg-rose-600 text-white rounded-lg text-xs font-medium transition inline-flex items-center justify-center space-x-1.5 touch-target shadow-sm">
-                    <i class="fa-solid fa-play text-xs"></i>
-                    <span>Assistir</span>
+                    <i class="fa-solid fa-eye text-xs"></i>
+                    <span>Abrir</span>
                   </button>
                 ` : ''}
 
@@ -700,7 +728,35 @@
 
       mediaPlayerWrapper.innerHTML = '';
 
-      if (['mp3', 'wav', 'ogg'].includes(ext)) {
+      if (isImage(name)) {
+        // Visualizador de Imagens Direto
+        mediaPlayerWrapper.innerHTML = `
+          <div class="w-full flex items-center justify-center p-2 bg-slate-950/80 rounded-xl min-h-[300px] max-h-[80vh] overflow-hidden">
+            <img src="${currentStreamUrl}" alt="${name}" class="max-h-[75vh] max-w-full object-contain rounded-lg shadow-lg">
+          </div>
+        `;
+      } else if (isPdf(name)) {
+        // Visualizador de PDFs embutido
+        mediaPlayerWrapper.innerHTML = `
+          <div class="w-full h-[75vh] bg-slate-900 rounded-xl overflow-hidden">
+            <iframe src="${currentStreamUrl}" class="w-full h-full border-0"></iframe>
+          </div>
+        `;
+      } else if (['txt', 'log'].includes(ext)) {
+        // Visualizador de Texto / Código
+        mediaPlayerWrapper.innerHTML = `<div class="p-4 text-xs text-slate-400">Carregando visualização...</div>`;
+        fetch(currentStreamUrl)
+          .then(r => r.text())
+          .then(text => {
+            mediaPlayerWrapper.innerHTML = `
+              <pre class="w-full max-h-[70vh] overflow-auto p-4 text-xs font-mono text-slate-200 bg-slate-950 rounded-xl whitespace-pre-wrap">${text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
+            `;
+          })
+          .catch(() => {
+            mediaPlayerWrapper.innerHTML = `<div class="p-4 text-xs text-rose-400">Não foi possível carregar a pré-visualização.</div>`;
+          });
+      } else if (isAudio(name)) {
+        // Player de Áudio
         const audio = document.createElement('audio');
         audio.id = 'playerTarget';
         audio.controls = true;
@@ -711,6 +767,7 @@
           controls: ['play', 'progress', 'current-time', 'duration', 'mute', 'volume']
         });
       } else {
+        // Player de Vídeo (MP4, MKV, WebM, MOV)
         const video = document.createElement('video');
         video.id = 'playerTarget';
         video.controls = true;
