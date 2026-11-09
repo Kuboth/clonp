@@ -253,15 +253,17 @@ app.get('/api/stream/:id', streamLimiter, async (req, res) => {
       headers['Content-Disposition'] = `inline; filename="${encodeURIComponent(filename)}"`;
     }
 
-    // Opções de aceleração e paralelismo
+    // Opções de aceleração e paralelismo adaptadas para resiliência e velocidade em redes lentas
     const downloadOptions = isDownload ? {
-      maxConnections: 4,          // 4 conexões estáveis padrão do MEGA (evita congestionamento no Render free)
-      initialChunkSize: 131072,
-      chunkSizeIncrement: 131072,
-      maxChunkSize: 1048576
+      maxConnections: 4,          // 4 conexões paralelas por chunk
+      initialChunkSize: 65536,    // 64KB inicial para First-Byte instantâneo mesmo com latência alta
+      chunkSizeIncrement: 131072, // Escala adaptativamente conforme a velocidade do cliente
+      maxChunkSize: 1048576,      // 1MB máximo por conexão
+      handleRetries: 5            // Tolerância a falhas transitórias de conexão
     } : {
       maxConnections: 4,          // Para streaming
-      initialChunkSize: 262144
+      initialChunkSize: 131072,
+      handleRetries: 5
     };
 
     const range = req.headers.range;

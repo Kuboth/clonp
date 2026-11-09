@@ -307,10 +307,16 @@
             </button>
           </div>
 
-          <a id="modalDownloadBtn" href="#" download class="text-slate-300 hover:text-white flex items-center space-x-1.5 py-1.5 px-3 rounded-lg bg-slate-800 active:bg-slate-700 text-xs">
-            <i class="fa-solid fa-download text-[11px]"></i>
-            <span>Baixar arquivo</span>
-          </a>
+          <div class="flex items-center space-x-1.5">
+            <button id="modalCopyBtn" title="Copiar Link para Gerenciador (Aria2 / 1DM / Motrix / XDM)" class="text-slate-400 hover:text-brand flex items-center space-x-1.5 py-1.5 px-3 rounded-lg bg-slate-800 active:bg-slate-700 text-xs">
+              <i class="fa-solid fa-link text-[11px]"></i>
+              <span class="hidden sm:inline">Copiar Link</span>
+            </button>
+            <a id="modalDownloadBtn" href="#" download class="text-slate-300 hover:text-white flex items-center space-x-1.5 py-1.5 px-3 rounded-lg bg-slate-800 active:bg-slate-750 text-xs">
+              <i class="fa-solid fa-download text-[11px]"></i>
+              <span>Baixar arquivo</span>
+            </a>
+          </div>
         </div>
       </div>
     </div>
@@ -323,7 +329,8 @@
 
   </main>
 
-  <!-- Plyr JS -->
+  <!-- Plyr JS & StreamSaver.js -->
+  <script src="https://cdn.jsdelivr.net/npm/streamsaver@2.0.6/StreamSaver.min.js"></script>
   <script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
 
   <script>
@@ -613,6 +620,16 @@
       });
       updateBatchUI();
       renderFolder(currentFolderNode);
+    };
+
+    window.copyDirectDownloadLink = (id, e) => {
+      if (e) e.stopPropagation();
+      const directUrl = `${window.location.origin}/api/stream/${id}?download=1`;
+      navigator.clipboard.writeText(directUrl).then(() => {
+        showToast('Link direto copiado! (Cole no 1DM / Aria2 / Motrix / XDM)');
+      }).catch(() => {
+        prompt('Copie o link direto para o gerenciador:', directUrl);
+      });
     };
 
     window.triggerDownload = (id) => {
@@ -975,13 +992,19 @@
               <div class="text-[10px] text-slate-400 font-mono mt-1">${item.formattedSize}</div>
             </div>
 
-            <div class="flex items-center pt-2 border-t border-slate-800/60 mt-1 justify-center" onclick="event.stopPropagation()">
+            <div class="flex items-center pt-2 border-t border-slate-800/60 mt-1 justify-center space-x-1" onclick="event.stopPropagation()">
               <button 
                 onclick="triggerDownload('${item.id}')"
-                title="Baixar"
-                class="w-full py-1.5 bg-slate-800 active:bg-slate-750 text-slate-300 hover:text-white border border-slate-700/70 rounded-lg text-[11px] font-medium transition flex items-center justify-center space-x-1">
+                title="Baixar Arquivo"
+                class="flex-1 py-1.5 bg-slate-800 active:bg-slate-750 text-slate-300 hover:text-white border border-slate-700/70 rounded-lg text-[11px] font-medium transition flex items-center justify-center space-x-1">
                 <i class="fa-solid fa-download text-[10px]"></i>
                 <span>Baixar</span>
+              </button>
+              <button 
+                onclick="copyDirectDownloadLink('${item.id}', event)"
+                title="Copiar Link para Gerenciador (Aria2 / 1DM / Motrix / XDM)"
+                class="w-8 py-1.5 bg-slate-800 active:bg-slate-750 text-slate-400 hover:text-brand border border-slate-700/70 rounded-lg text-[11px] font-medium transition flex items-center justify-center">
+                <i class="fa-solid fa-link text-[10px]"></i>
               </button>
             </div>
           `;
@@ -1050,9 +1073,16 @@
               </div>
             </div>
 
-            <div onclick="event.stopPropagation()">
+            <div class="flex items-center space-x-1" onclick="event.stopPropagation()">
+              <button 
+                onclick="copyDirectDownloadLink('${item.id}', event)"
+                title="Copiar Link para Gerenciador (Aria2 / 1DM / Motrix / XDM)"
+                class="p-2 bg-slate-800/80 active:bg-slate-750 text-slate-400 hover:text-brand rounded-lg text-xs font-medium transition inline-flex items-center justify-center">
+                <i class="fa-solid fa-link text-xs"></i>
+              </button>
               <button 
                 onclick="triggerDownload('${item.id}')"
+                title="Baixar Arquivo"
                 class="p-2 bg-slate-800/80 active:bg-slate-750 text-slate-400 hover:text-white rounded-lg text-xs font-medium transition inline-flex items-center justify-center">
                 <i class="fa-solid fa-download text-xs"></i>
               </button>
@@ -1169,6 +1199,14 @@
         modalDownloadBtn.onclick = (e) => {
           e.preventDefault();
           triggerDownload(id);
+        };
+      }
+
+      const modalCopyBtn = document.getElementById('modalCopyBtn');
+      if (modalCopyBtn) {
+        modalCopyBtn.onclick = (e) => {
+          e.preventDefault();
+          copyDirectDownloadLink(id, e);
         };
       }
 
