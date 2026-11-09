@@ -12,7 +12,7 @@ const mime = require('mime-types');
 const archiver = require('archiver');
 const srt2vtt = require('srt-to-vtt');
 const axios = require('axios');
-const { File, Storage } = require('megajs');
+const { File } = require('megajs');
 const { HttpsProxyAgent } = require('https-proxy-agent');
 
 const app = express();
@@ -606,53 +606,7 @@ app.post('/api/download-batch', streamLimiter, async (req, res) => {
   }
 });
 
-// 7. Rota de Clonagem Instantânea de Nó para Conta MEGA (sem baixar para disco)
-app.post('/api/clone-to-mega', inspectLimiter, async (req, res) => {
-  const { email, password, targetUrl } = req.body;
-
-  if (!email || !password || !targetUrl) {
-    return res.status(400).json({ error: 'E-mail, senha e URL do MEGA são obrigatórios.' });
-  }
-
-  try {
-    const storage = await new Promise((resolve, reject) => {
-      const s = new Storage({ email, password, autologin: false });
-      s.login((err) => {
-        if (err) return reject(err);
-        resolve(s);
-      });
-    });
-
-    const targetFile = File.fromURL(targetUrl);
-    await targetFile.loadAttributes();
-
-    if (targetFile.directory) {
-      return res.status(400).json({ error: 'Selecione um arquivo específico para clonar diretamente.' });
-    }
-
-    const cloned = await new Promise((resolve, reject) => {
-      storage.root.importFile(targetFile, (err, file) => {
-        if (err) return reject(err);
-        resolve(file);
-      });
-    });
-
-    storage.close();
-
-    return res.json({
-      success: true,
-      message: `Arquivo "${cloned.name}" clonado com sucesso para a sua conta MEGA!`,
-      name: cloned.name
-    });
-  } catch (err) {
-    console.error('Erro na clonagem para o MEGA:', err);
-    return res.status(500).json({
-      error: 'Falha ao clonar para a conta MEGA: ' + (err.message || 'Verifique suas credenciais.')
-    });
-  }
-});
-
-// 8. Rota de Keep-Alive / Health Check
+// 7. Rota de Keep-Alive / Health Check
 app.get('/api/health', (req, res) => {
   res.send('OK');
 });

@@ -957,13 +957,6 @@
         };
       }
 
-      const modalCloneBtn = document.getElementById('modalCloneBtn');
-      if (modalCloneBtn) {
-        modalCloneBtn.onclick = () => {
-          promptCloneFile(id, name);
-        };
-      }
-
       mediaPlayerWrapper.innerHTML = '';
 
       if (isImage(name)) {
@@ -1173,36 +1166,3 @@
     mediaModal.addEventListener('click', (e) => {
       if (e.target === mediaModal) closePlayer();
     });
-
-    // Função de Clonagem Instantânea para Conta MEGA
-    async function promptCloneFile(id, filename) {
-      const email = prompt('Digite seu e-mail do MEGA:');
-      if (!email) return;
-      const password = prompt('Digite sua senha do MEGA (não armazenada no servidor):');
-      if (!password) return;
-
-      const currentMegaUrl = urlInput.value.trim();
-      if (!currentMegaUrl) {
-        showToast('URL do MEGA não encontrada.');
-        return;
-      }
-
-      showToast(`Clonando "${filename}" para sua conta...`);
-
-      try {
-        const res = await fetch('/api/clone-to-mega', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password, targetUrl: currentMegaUrl })
-        });
-
-        const data = await res.json();
-        if (res.ok && data.success) {
-          showToast(data.message || 'Arquivo clonado com sucesso!');
-        } else {
-          showToast(data.error || 'Erro ao clonar arquivo.');
-        }
-      } catch (err) {
-        showToast('Erro de conexão ao clonar.');
-      }
-    }
