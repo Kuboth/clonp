@@ -1095,11 +1095,12 @@
           controls: ['play', 'progress', 'current-time', 'duration', 'mute', 'volume']
         });
       } else {
-        // Player de Vídeo com Retomada de Posição (Resume Playback)
+        // Player de Vídeo Otimizado com Preload Agressivo e Retomada de Posição
         const video = document.createElement('video');
         video.id = 'playerTarget';
         video.controls = true;
         video.playsInline = true;
+        video.preload = 'auto'; // Força o navegador a puxar o buffer inicial imediatamente
         video.className = 'w-full max-h-[82vh] object-contain';
 
         let tracksHtml = '';
