@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "strict": false,
+    "skipLibCheck": true,
+    "esModuleInterop": true
+  },
+  "include": [
+    "server.js"
+  ],
+  "exclude": [
+    "node_modules",
+    "public"
+  ]
+}

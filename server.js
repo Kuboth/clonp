@@ -1,3 +1,8 @@
+/**
+ * @file server.js
+ * @description Servidor clonp - Debrid, Streaming e Downloader para MEGA.nz
+ */
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -8,6 +13,7 @@ const archiver = require('archiver');
 const srt2vtt = require('srt-to-vtt');
 const axios = require('axios');
 const { File } = require('megajs');
+const { HttpsProxyAgent } = require('https-proxy-agent');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -55,10 +61,43 @@ const streamLimiter = rateLimit({
   legacyHeaders: false
 });
 
+/**
+ * @typedef {Object} CachedFileItem
+ * @property {any} instance Instância megajs.File
+ * @property {number} cachedAt Timestamp em milissegundos
+ */
+
+/**
+ * @typedef {Object} TreeNode
+ * @property {string} id ID do nó
+ * @property {string} name Nome do arquivo ou pasta
+ * @property {boolean} isDirectory Se é pasta
+ * @property {number} size Tamanho em bytes
+ * @property {string} formattedSize Tamanho legível
+ * @property {string} path Caminho relativo
+ * @property {string} mimeType Tipo MIME
+ * @property {string} extension Extensão em minúsculas
+ * @property {number} timestamp Timestamp de modificação
+ * @property {string} formattedDate Data formatada em pt-BR
+ * @property {string} [subtitleId] ID de legenda associada
+ * @property {TreeNode[]} children Filhos caso seja diretório
+ */
+
+/**
+ * @typedef {Object} CachedFolder
+ * @property {string} name Nome da pasta raiz
+ * @property {TreeNode[]} items Lista plana de arquivos
+ * @property {number} cachedAt Timestamp
+ */
+
 // 3. Cache em memória com TTL (Auto-limpeza para evitar estouro de RAM no Render)
 const CACHE_TTL_MS = 2 * 60 * 60 * 1000; // 2 horas de vida útil
+/** @type {Map<string, CachedFileItem>} */
 const fileInstancesCache = new Map();
+/** @type {Map<string, CachedFolder>} */
 const folderCache = new Map();
+/** @type {Map<string, { ids: string[], zipName: string, expiresAt: number }>} */
+const batchTokenCache = new Map();
 
 // Rotina periódica a cada 15 minutos para remover itens expirados
 setInterval(() => {
@@ -73,12 +112,23 @@ setInterval(() => {
       folderCache.delete(key);
     }
   }
+  for (const [key, val] of batchTokenCache.entries()) {
+    if (now > val.expiresAt) {
+      batchTokenCache.delete(key);
+    }
+  }
 }, 15 * 60 * 1000);
 
-// Gerenciador de Proxies Gratuitos
+// Gerenciador de Proxies
 let freeProxies = [];
 let lastProxyFetch = 0;
+let proxyIndex = 0;
+const PROXY_ENABLED = process.env.ENABLE_MEGA_PROXY === 'true';
 
+/**
+ * Atualiza e mantém o pool de proxies HTTP/HTTPS
+ * @returns {Promise<string[]>} Lista de proxies
+ */
 async function updateFreeProxies() {
   const now = Date.now();
   if (now - lastProxyFetch < 30 * 60 * 1000 && freeProxies.length > 0) {
@@ -92,7 +142,7 @@ async function updateFreeProxies() {
     if (res.data) {
       freeProxies = res.data.split('\n').map(p => p.trim()).filter(Boolean);
       lastProxyFetch = now;
-      console.log(`[Proxy Pool] Carregados ${freeProxies.length} proxies gratuitos.`);
+      console.log(`[Proxy Pool] Carregados ${freeProxies.length} proxies.`);
     }
   } catch (err) {
     console.warn('[Proxy Pool] Falha ao carregar proxies externos:', err.message);
@@ -102,6 +152,42 @@ async function updateFreeProxies() {
 
 updateFreeProxies();
 
+/**
+ * Retorna o próximo agente proxy rotacionado se configurado, ou null para conexão direta
+ * @returns {HttpsProxyAgent<string> | null}
+ */
+function getNextProxyAgent() {
+  if (!PROXY_ENABLED || freeProxies.length === 0) {
+    return null;
+  }
+  const proxy = freeProxies[proxyIndex % freeProxies.length];
+  proxyIndex++;
+  try {
+    return new HttpsProxyAgent(`http://${proxy}`);
+  } catch (err) {
+    return null;
+  }
+}
+
+/**
+ * Cria uma instância File da biblioteca megajs aplicando proxy se disponível
+ * @param {string} url URL pública do MEGA
+ * @returns {any}
+ */
+function createMegaFileInstance(url) {
+  const agent = getNextProxyAgent();
+  if (agent) {
+    return File.fromURL(url, { httpAgent: agent, httpsAgent: agent });
+  }
+  return File.fromURL(url);
+}
+
+/**
+ * Formata bytes em formato legível (KB, MB, GB, etc.)
+ * @param {number} bytes 
+ * @param {number} [decimals=2] 
+ * @returns {string}
+ */
 function formatBytes(bytes, decimals = 2) {
   if (!+bytes) return '0 Bytes';
   const k = 1024;
@@ -111,7 +197,11 @@ function formatBytes(bytes, decimals = 2) {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 }
 
-// Sanitização de nomes de arquivos para evitar quebra de cabeçalho HTTP
+/**
+ * Sanitização de nomes de arquivos para evitar quebra de cabeçalho HTTP
+ * @param {string} name 
+ * @returns {string}
+ */
 function sanitizeFilename(name) {
   return (name || 'download').replace(/[\r\n\t"']/g, '_');
 }
@@ -124,13 +214,14 @@ app.post('/api/inspect', inspectLimiter, async (req, res) => {
   }
 
   try {
-    const fileOrFolder = File.fromURL(url);
+    const fileOrFolder = createMegaFileInstance(url);
     await fileOrFolder.loadAttributes();
 
     const now = Date.now();
 
     if (fileOrFolder.directory) {
       const folderKey = `folder_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      /** @type {TreeNode[]} */
       const allFiles = [];
 
       const buildTree = (node, currentPath = '') => {
@@ -140,6 +231,7 @@ app.post('/api/inspect', inspectLimiter, async (req, res) => {
         const timestamp = node.timestamp ? node.timestamp * 1000 : (node.mtime ? new Date(node.mtime).getTime() : Date.now());
         const ext = node.directory ? 'folder' : (node.name.split('.').pop() || '').toLowerCase();
 
+        /** @type {TreeNode} */
         const nodeData = {
           id: nodeId,
           name: node.name || 'Pasta',
@@ -197,6 +289,7 @@ app.post('/api/inspect', inspectLimiter, async (req, res) => {
       const timestamp = fileOrFolder.timestamp ? fileOrFolder.timestamp * 1000 : Date.now();
       const ext = (fileOrFolder.name.split('.').pop() || '').toLowerCase();
 
+      /** @type {TreeNode} */
       const singleFile = {
         id: cacheKey,
         name: fileOrFolder.name,
@@ -387,7 +480,57 @@ app.get('/api/download-folder/:folderKey', streamLimiter, async (req, res) => {
   }
 });
 
-// 4. Rota de download em lote (arquivos selecionados via zip)
+// 5. Preparar download em lote (Gera ticket temporário para download via GET sem estourar RAM do navegador)
+app.post('/api/download-batch/prepare', streamLimiter, (req, res) => {
+  const { ids, zipName } = req.body;
+  if (!ids || !Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: 'Nenhum arquivo selecionado.' });
+  }
+
+  const token = `batch_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+  batchTokenCache.set(token, {
+    ids,
+    zipName: sanitizeFilename(zipName || 'clonp_selecao'),
+    expiresAt: Date.now() + 10 * 60 * 1000 // 10 minutos
+  });
+
+  return res.json({ downloadUrl: `/api/download-batch/${token}` });
+});
+
+// 6. Rota GET de streaming do download em lote preparado
+app.get('/api/download-batch/:token', streamLimiter, async (req, res) => {
+  const { token } = req.params;
+  const batchData = batchTokenCache.get(token);
+
+  if (!batchData) {
+    return res.status(404).send('Token de download expirado ou não encontrado.');
+  }
+
+  const archive = archiver('zip', { zlib: { level: 0 } });
+  const finalName = `${batchData.zipName}.zip`;
+  res.attachment(finalName);
+
+  archive.pipe(res);
+  archive.on('error', (err) => {
+    console.error('Erro no batch zip:', err);
+    if (!res.headersSent) res.status(500).end();
+  });
+
+  try {
+    for (const id of batchData.ids) {
+      const cached = fileInstancesCache.get(id);
+      if (cached && cached.instance) {
+        const fileStream = cached.instance.download();
+        archive.append(fileStream, { name: cached.instance.name || 'arquivo' });
+      }
+    }
+    await archive.finalize();
+  } catch (err) {
+    console.error('Erro ao empacotar seleção:', err);
+  }
+});
+
+// Rota POST legada mantida para retrocompatibilidade
 app.post('/api/download-batch', streamLimiter, async (req, res) => {
   const { ids, zipName } = req.body;
   if (!ids || !Array.isArray(ids) || ids.length === 0) {
@@ -418,7 +561,7 @@ app.post('/api/download-batch', streamLimiter, async (req, res) => {
   }
 });
 
-// 5. Rota de Keep-Alive / Health Check
+// 7. Rota de Keep-Alive / Health Check
 app.get('/api/health', (req, res) => {
   res.send('OK');
 });
@@ -432,9 +575,10 @@ if (process.env.RENDER_EXTERNAL_URL) {
   console.log(`[Keep-Alive] Auto-ping ativo para: ${keepAliveUrl}`);
 }
 
-// 6. Status do Pool de Proxies
+// 8. Status do Pool de Proxies
 app.get('/api/proxy-status', async (req, res) => {
   res.json({
+    proxyEnabled: PROXY_ENABLED,
     activeProxiesCount: freeProxies.length,
     lastUpdate: new Date(lastProxyFetch).toLocaleTimeString()
   });
@@ -444,5 +588,6 @@ app.listen(PORT, () => {
   console.log(`===============================================`);
   console.log(` Clonp rodando com sucesso e protegido!`);
   console.log(` Porta: ${PORT}`);
+  console.log(` Proxy Ativo: ${PROXY_ENABLED}`);
   console.log(`===============================================`);
 });
