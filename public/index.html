@@ -734,16 +734,62 @@
       });
     }
 
+    function goBackFolder() {
+      if (!mediaModal.classList.contains('hidden')) {
+        closePlayer();
+        return true;
+      }
+      if (pathStack.length > 1) {
+        pathStack.pop();
+        currentFolderNode = pathStack[pathStack.length - 1].node;
+        renderBreadcrumbs();
+        renderFolder(currentFolderNode);
+        return true;
+      }
+      return false;
+    }
+
     window.enterFolder = (folderId) => {
       const targetFolder = (currentFolderNode.children || []).find(c => c.id === folderId);
       if (targetFolder) {
         pathStack.push({ name: targetFolder.name, node: targetFolder });
         currentFolderNode = targetFolder;
+        history.pushState({ folderId, depth: pathStack.length }, '', `#folder-${pathStack.length}`);
         renderBreadcrumbs();
         renderFolder(currentFolderNode);
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
     };
+
+    // 1. Suporte nativo ao Botão Voltar do Android / Navegador
+    window.addEventListener('popstate', (e) => {
+      goBackFolder();
+    });
+
+    // 2. Gesto de Deslizar para Voltar no Touch (Swipe Right)
+    let touchStartX = 0;
+    let touchStartY = 0;
+
+    document.addEventListener('touchstart', (e) => {
+      if (e.touches && e.touches.length === 1) {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+      }
+    }, { passive: true });
+
+    document.addEventListener('touchend', (e) => {
+      if (!e.changedTouches || e.changedTouches.length === 0) return;
+      const touchEndX = e.changedTouches[0].clientX;
+      const touchEndY = e.changedTouches[0].clientY;
+
+      const diffX = touchEndX - touchStartX;
+      const diffY = Math.abs(touchEndY - touchStartY);
+
+      // Deslizar para a direita (mais de 75px na horizontal e com desvio vertical pequeno)
+      if (diffX > 75 && diffY < 60 && touchStartX < 90) {
+        goBackFolder();
+      }
+    }, { passive: true });
 
     window.copyStreamLink = (link) => {
       navigator.clipboard.writeText(link).then(() => {
