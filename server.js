@@ -15,11 +15,22 @@ const PORT = process.env.PORT || 3000;
 // Configuração de Proxy confiável (Render / PaaS)
 app.set('trust proxy', 1);
 
+// Middleware manual de CORS e cabeçalhos de mídia permissivos para Canvas/Video
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, HEAD');
+  res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Accept');
+  res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Content-Length, Accept-Ranges, Content-Disposition');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+});
+
 // 1. Cabeçalhos de Segurança HTTP (Helmet com liberação para mídia e CDN)
 app.use(
   helmet({
-    contentSecurityPolicy: false, // Permite CDNs de Tailwind, Plyr e FontAwesome
-    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: false,
     crossOriginEmbedderPolicy: false
   })
 );

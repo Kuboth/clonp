@@ -844,8 +844,7 @@
       const video = document.createElement('video');
       video.muted = true;
       video.playsInline = true;
-      video.preload = 'metadata';
-      video.crossOrigin = 'anonymous';
+      video.preload = 'auto';
 
       let cleanedUp = false;
       const cleanup = () => {
@@ -855,21 +854,21 @@
         video.load();
         video.remove();
         isProcessingVideoThumb = false;
-        setTimeout(processNextVideoThumb, 60); // Pequeno intervalo para fluidez do navegador
+        setTimeout(processNextVideoThumb, 40);
       };
 
-      const timeout = setTimeout(cleanup, 4500); // 4.5s max para não travar a fila
+      const timeout = setTimeout(cleanup, 5000);
 
-      video.addEventListener('loadeddata', () => {
-        // Pula para 10% da duração ou 1.5s para evitar telas pretas iniciais
-        video.currentTime = Math.min(2.0, (video.duration || 10) * 0.15);
-      }, { once: true });
-
-      video.addEventListener('seeked', () => {
+      const captureFrame = () => {
         try {
           const vw = video.videoWidth || 16;
           const vh = video.videoHeight || 9;
-          const isVertical = vh > vw; // Detecta 9:16 (vertical/reels/shorts) vs 16:9 (horizontal)
+          if (!video.videoWidth || !video.videoHeight) {
+            clearTimeout(timeout);
+            cleanup();
+            return;
+          }
+          const isVertical = vh > vw;
 
           const canvas = document.createElement('canvas');
           if (isVertical) {
@@ -885,14 +884,12 @@
           
           const cachePayload = { thumbUrl, isVertical };
 
-          // Salva na memória RAM
           if (videoThumbCache.size > 150) {
             const firstKey = videoThumbCache.keys().next().value;
             videoThumbCache.delete(firstKey);
           }
           videoThumbCache.set(videoId, cachePayload);
 
-          // Salva no IndexedDB de forma persistente
           if (window.idbKeyval) {
             idbKeyval.set(`thumb_${videoId}`, cachePayload).catch(() => {});
           }
@@ -901,6 +898,18 @@
         } catch (e) {}
         clearTimeout(timeout);
         cleanup();
+      };
+
+      video.addEventListener('loadeddata', () => {
+        if (video.duration && !isNaN(video.duration)) {
+          video.currentTime = Math.min(1.0, video.duration * 0.1);
+        } else {
+          captureFrame();
+        }
+      }, { once: true });
+
+      video.addEventListener('seeked', () => {
+        captureFrame();
       }, { once: true });
 
       video.addEventListener('error', () => {
@@ -1066,7 +1075,7 @@
           if (isImg) {
             thumbnailHtml = `
               <div class="w-full h-28 rounded-lg overflow-hidden bg-zinc-950 border border-zinc-800/90 flex items-center justify-center mb-2 relative group-hover:border-zinc-700 transition">
-                <img src="${fullStreamUrl}" alt="${item.name}" loading="lazy" decoding="async" class="w-full h-full object-cover transition-opacity duration-300 opacity-0" onload="this.classList.remove('opacity-0')">
+                <img src="${fullStreamUrl}" alt="${item.name}" loading="lazy" decoding="async" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='<div class=\\'flex flex-col items-center justify-center text-zinc-500 text-[10px]\\'><i class=\\'fa-solid fa-image text-xl mb-1 text-zinc-600\\'></i><span>IMG</span></div>'">
                 <div class="absolute bottom-1 right-1 bg-black/70 backdrop-blur-sm px-1 py-0.5 rounded text-[9px] text-zinc-300 font-mono leading-none">
                   IMG
                 </div>
