@@ -575,11 +575,10 @@
 
         if (currentViewMode === 'grid') {
           // ================= MODO GRADE =================
-          card.className = 'bg-darkcard border border-slate-800/80 rounded-xl p-2.5 flex flex-col justify-between transition hover:border-slate-700 active:scale-[0.98] select-none';
+          card.className = 'bg-darkcard border border-slate-800/80 rounded-xl p-2.5 flex flex-col justify-between transition hover:border-slate-700 active:scale-[0.98] select-none cursor-pointer';
 
           if (item.isDirectory) {
             card.onclick = () => enterFolder(item.id);
-            card.classList.add('cursor-pointer');
             card.innerHTML = `
               <div class="flex flex-col items-center text-center py-2 flex-1 justify-center">
                 <div class="w-12 h-12 rounded-2xl bg-brand/10 border border-brand/20 flex items-center justify-center text-brand mb-2">
@@ -590,12 +589,20 @@
               </div>
             `;
           } else {
-            // Se for imagem, exibe miniatura direta
+            // Clicar em qualquer lugar do card abre o arquivo direto
+            card.onclick = () => {
+              if (canView) {
+                openPlayer(item.id, encodeURIComponent(item.name), item.subtitleId || '');
+              } else {
+                window.location.href = `/api/stream/${item.id}?download=1`;
+              }
+            };
+
             const thumbnailHtml = isImg 
-              ? `<div class="w-full h-24 rounded-xl overflow-hidden bg-slate-900 border border-slate-800 flex items-center justify-center mb-1.5 cursor-pointer" onclick="openPlayer('${item.id}', '${encodeURIComponent(item.name)}', '')">
+              ? `<div class="w-full h-24 rounded-xl overflow-hidden bg-slate-900 border border-slate-800 flex items-center justify-center mb-1.5">
                    <img src="${fullStreamUrl}" alt="${item.name}" loading="lazy" class="w-full h-full object-cover">
                  </div>`
-              : `<div class="w-11 h-11 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center mb-1.5 flex-shrink-0 cursor-pointer" onclick="${canView ? `openPlayer('${item.id}', '${encodeURIComponent(item.name)}', '${item.subtitleId || ''}')` : ''}">
+              : `<div class="w-11 h-11 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center mb-1.5 flex-shrink-0">
                    <i class="fa-solid ${iconClass} text-lg"></i>
                  </div>`;
 
@@ -606,23 +613,13 @@
                 <div class="text-[10px] text-slate-400 font-mono mt-1">${item.formattedSize}</div>
               </div>
 
-              <!-- Ações do Card em Grade -->
-              <div class="flex items-center gap-1 pt-2 border-t border-slate-800/60 mt-1 justify-center">
-                ${canView ? `
-                  <button 
-                    onclick="openPlayer('${item.id}', '${encodeURIComponent(item.name)}', '${item.subtitleId || ''}')" 
-                    title="Visualizar"
-                    class="flex-1 py-1.5 bg-brand active:bg-rose-600 text-white rounded-lg text-[11px] font-medium transition flex items-center justify-center space-x-1">
-                    <i class="fa-solid fa-eye text-[10px]"></i>
-                    <span>Abrir</span>
-                  </button>
-                ` : ''}
-
+              <!-- Ação de Baixar -->
+              <div class="flex items-center pt-2 border-t border-slate-800/60 mt-1 justify-center" onclick="event.stopPropagation()">
                 <a 
                   href="/api/stream/${item.id}?download=1" 
                   download 
                   title="Baixar"
-                  class="flex-1 py-1.5 bg-slate-800 active:bg-slate-750 text-slate-200 border border-slate-700/70 rounded-lg text-[11px] font-medium transition flex items-center justify-center space-x-1">
+                  class="w-full py-1.5 bg-slate-800 active:bg-slate-750 text-slate-300 hover:text-white border border-slate-700/70 rounded-lg text-[11px] font-medium transition flex items-center justify-center space-x-1">
                   <i class="fa-solid fa-download text-[10px]"></i>
                   <span>Baixar</span>
                 </a>
@@ -632,11 +629,10 @@
 
         } else {
           // ================= MODO LISTA =================
-          card.className = 'bg-darkcard border border-slate-800/80 rounded-xl p-3 flex flex-col space-y-2.5 transition active:border-slate-700';
+          card.className = 'bg-darkcard border border-slate-800/80 rounded-xl p-3 flex flex-col space-y-2.5 transition active:border-slate-700 cursor-pointer';
 
           if (item.isDirectory) {
             card.onclick = () => enterFolder(item.id);
-            card.classList.add('cursor-pointer');
             card.innerHTML = `
               <div class="flex items-center justify-between">
                 <div class="flex items-center space-x-3 min-w-0 flex-1">
@@ -652,43 +648,46 @@
               </div>
             `;
           } else {
+            // Clicar no corpo do card abre o arquivo direto
+            card.onclick = () => {
+              if (canView) {
+                openPlayer(item.id, encodeURIComponent(item.name), item.subtitleId || '');
+              } else {
+                window.location.href = `/api/stream/${item.id}?download=1`;
+              }
+            };
+
             const previewIconOrThumb = isImg 
-              ? `<div class="w-10 h-10 rounded-xl overflow-hidden bg-slate-900 border border-slate-800 flex-shrink-0 cursor-pointer" onclick="openPlayer('${item.id}', '${encodeURIComponent(item.name)}', '')">
+              ? `<div class="w-10 h-10 rounded-xl overflow-hidden bg-slate-900 border border-slate-800 flex-shrink-0">
                    <img src="${fullStreamUrl}" alt="${item.name}" loading="lazy" class="w-full h-full object-cover">
                  </div>`
-              : `<div class="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center flex-shrink-0 mt-0.5 cursor-pointer" onclick="${canView ? `openPlayer('${item.id}', '${encodeURIComponent(item.name)}', '${item.subtitleId || ''}')` : ''}">
+              : `<div class="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center flex-shrink-0 mt-0.5">
                    <i class="fa-solid ${iconClass} text-sm"></i>
                  </div>`;
 
             card.innerHTML = `
-              <div class="flex items-start space-x-3 min-w-0">
-                ${previewIconOrThumb}
-                <div class="min-w-0 flex-1">
-                  <div class="font-medium text-xs sm:text-sm text-slate-200 break-words leading-tight">${item.name}</div>
-                  <div class="flex items-center space-x-2 mt-1 text-[11px] text-slate-400 font-mono">
-                    <span>${item.formattedSize}</span>
-                    ${item.subtitleId ? '<span class="text-[9px] bg-yellow-500/20 text-yellow-400 px-1 py-0.5 rounded font-sans">Legenda</span>' : ''}
+              <div class="flex items-center justify-between gap-3">
+                <div class="flex items-start space-x-3 min-w-0 flex-1">
+                  ${previewIconOrThumb}
+                  <div class="min-w-0 flex-1">
+                    <div class="font-medium text-xs sm:text-sm text-slate-200 break-words leading-tight">${item.name}</div>
+                    <div class="flex items-center space-x-2 mt-1 text-[11px] text-slate-400 font-mono">
+                      <span>${item.formattedSize}</span>
+                      ${item.subtitleId ? '<span class="text-[9px] bg-yellow-500/20 text-yellow-400 px-1 py-0.5 rounded font-sans">Legenda</span>' : ''}
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div class="flex items-center gap-2 pt-1 border-t border-slate-800/60 justify-end">
-                ${canView ? `
-                  <button 
-                    onclick="openPlayer('${item.id}', '${encodeURIComponent(item.name)}', '${item.subtitleId || ''}')" 
-                    class="flex-1 sm:flex-none px-3.5 py-2 bg-brand active:bg-rose-600 text-white rounded-lg text-xs font-medium transition inline-flex items-center justify-center space-x-1.5 touch-target shadow-sm">
-                    <i class="fa-solid fa-eye text-xs"></i>
-                    <span>Abrir</span>
-                  </button>
-                ` : ''}
-
-                <a 
-                  href="/api/stream/${item.id}?download=1" 
-                  download 
-                  class="flex-1 sm:flex-none px-3.5 py-2 bg-slate-800 active:bg-slate-750 text-slate-200 border border-slate-700/70 rounded-lg text-xs font-medium transition inline-flex items-center justify-center space-x-1.5 touch-target">
-                  <i class="fa-solid fa-download text-xs"></i>
-                  <span>Baixar</span>
-                </a>
+                <!-- Botão de Baixar Rápido -->
+                <div onclick="event.stopPropagation()">
+                  <a 
+                    href="/api/stream/${item.id}?download=1" 
+                    download 
+                    class="px-3 py-2 bg-slate-800 active:bg-slate-750 text-slate-300 hover:text-white border border-slate-700/70 rounded-xl text-xs font-medium transition inline-flex items-center space-x-1.5 touch-target">
+                    <i class="fa-solid fa-download text-xs"></i>
+                    <span class="hidden sm:inline">Baixar</span>
+                  </a>
+                </div>
               </div>
             `;
           }
