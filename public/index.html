@@ -730,14 +730,35 @@
       breadcrumbs.scrollLeft = breadcrumbs.scrollWidth;
     }
 
+    let renderedItemsLimit = 40; // Renderiza os primeiros 40 arquivos para carga instantânea
+    let currentFolderChildren = [];
+
+    // Scroll infinito para carregar mais itens suavemente sem travar o celular
+    window.addEventListener('scroll', () => {
+      if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 500) {
+        if (renderedItemsLimit < currentFolderChildren.length) {
+          renderedItemsLimit += 40;
+          appendMoreItems();
+        }
+      }
+    }, { passive: true });
+
+    function appendMoreItems() {
+      const slice = currentFolderChildren.slice(renderedItemsLimit - 40, renderedItemsLimit);
+      slice.forEach(item => {
+        const card = createItemCard(item);
+        fileListContainer.appendChild(card);
+      });
+    }
+
     function renderFolder(folderNode) {
       fileListContainer.innerHTML = '';
-      let children = folderNode.children || [];
-
-      children = sortItems(children);
+      currentFolderChildren = folderNode.children || [];
+      currentFolderChildren = sortItems(currentFolderChildren);
+      renderedItemsLimit = 40;
 
       // Atualiza lista de itens visualizáveis para a galeria swipe
-      viewableItemsList = children.filter(c => !c.isDirectory && isViewable(c.name));
+      viewableItemsList = currentFolderChildren.filter(c => !c.isDirectory && isViewable(c.name));
 
       // Botão "Voltar"
       if (pathStack.length > 1) {
@@ -768,7 +789,7 @@
         fileListContainer.appendChild(backCard);
       }
 
-      if (!children.length) {
+      if (!currentFolderChildren.length) {
         const empty = document.createElement('div');
         empty.className = 'col-span-full py-10 text-center text-slate-500 text-xs bg-slate-900/30 rounded-xl border border-dashed border-slate-800';
         empty.textContent = 'Esta pasta está vazia.';
@@ -776,186 +797,189 @@
         return;
       }
 
-      children.forEach(item => {
-        const card = document.createElement('div');
-        const iconClass = getFileIcon(item.name);
-        const canView = isViewable(item.name);
-        const isImg = isImage(item.name);
-        const isVid = isVideo(item.name);
-        const fullStreamUrl = `${window.location.origin}/api/stream/${item.id}`;
-        const isSelected = selectedItemIds.has(item.id);
-
-        if (currentViewMode === 'grid') {
-          // ================= MODO GRADE =================
-          card.className = `bg-darkcard border ${isSelected ? 'border-brand ring-1 ring-brand' : 'border-slate-800/80'} rounded-2xl p-2.5 flex flex-col justify-between transition hover:border-slate-700 active:scale-[0.98] select-none cursor-pointer group shadow-sm relative`;
-
-          if (item.isDirectory) {
-            card.onclick = () => enterFolder(item.id);
-            card.innerHTML = `
-              <div class="flex flex-col items-center text-center py-2 flex-1 justify-center">
-                <div class="w-14 h-14 rounded-2xl bg-brand/10 border border-brand/20 flex items-center justify-center text-brand mb-2 group-hover:scale-105 transition">
-                  <i class="fa-solid fa-folder text-3xl"></i>
-                </div>
-                <div class="font-semibold text-xs text-slate-100 line-clamp-2 w-full break-words" title="${item.name}">${item.name}</div>
-                <div class="text-[10px] text-slate-500 mt-1">${item.children ? item.children.length + ' item(ns)' : 'Pasta'}</div>
-              </div>
-            `;
-          } else {
-            card.onclick = () => {
-              if (isSelectionMode) {
-                if (selectedItemIds.has(item.id)) selectedItemIds.delete(item.id);
-                else selectedItemIds.add(item.id);
-                updateBatchUI();
-                renderFolder(currentFolderNode);
-                return;
-              }
-              if (canView) {
-                openPlayer(item.id, encodeURIComponent(item.name), item.subtitleId || '');
-              } else {
-                window.location.href = `/api/stream/${item.id}?download=1`;
-              }
-            };
-
-            let thumbnailHtml = '';
-            if (isImg) {
-              thumbnailHtml = `
-                <div class="w-full h-28 rounded-xl overflow-hidden bg-slate-950 border border-slate-800/80 flex items-center justify-center mb-2 relative group-hover:border-slate-700 transition">
-                  <img src="${fullStreamUrl}" alt="${item.name}" loading="lazy" decoding="async" class="w-full h-full object-cover transition-opacity duration-300 opacity-0" onload="this.classList.remove('opacity-0')">
-                  <div class="absolute bottom-1.5 right-1.5 bg-black/60 backdrop-blur-sm p-1 rounded-md text-[9px] text-emerald-400 leading-none">
-                    <i class="fa-solid fa-image"></i>
-                  </div>
-                </div>`;
-            } else if (isVid) {
-              // Poster ultraleve em SVG e CSS: Zero conexões com o servidor, zero consumo de banda!
-              thumbnailHtml = `
-                <div class="w-full h-28 rounded-xl overflow-hidden bg-gradient-to-tr from-slate-950 via-slate-900 to-indigo-950/40 border border-slate-800/80 flex flex-col items-center justify-center mb-2 relative group-hover:border-slate-700 transition">
-                  <div class="w-11 h-11 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mb-1 group-hover:scale-110 transition">
-                    <i class="fa-solid fa-film text-xl"></i>
-                  </div>
-                  <span class="text-[9px] text-slate-400 uppercase font-mono tracking-wider">${item.extension || 'VIDEO'}</span>
-                  <div class="absolute bottom-1.5 right-1.5 bg-black/60 backdrop-blur-sm p-1 rounded-md text-[9px] text-indigo-400 leading-none">
-                    <i class="fa-solid fa-play"></i>
-                  </div>
-                </div>`;
-            } else if (isPdf(item.name)) {
-              thumbnailHtml = `
-                <div class="w-full h-28 rounded-xl bg-gradient-to-b from-rose-950/20 to-slate-950 border border-slate-800/80 flex flex-col items-center justify-center mb-2 relative group-hover:border-slate-700 transition">
-                  <i class="fa-solid fa-file-pdf text-3xl text-rose-500 mb-1"></i>
-                  <span class="text-[9px] text-rose-400 font-semibold uppercase tracking-wider">PDF</span>
-                </div>`;
-            } else {
-              thumbnailHtml = `
-                <div class="w-full h-28 rounded-xl bg-slate-950 border border-slate-800/80 flex flex-col items-center justify-center mb-2 relative group-hover:border-slate-700 transition">
-                  <i class="fa-solid ${iconClass} text-2xl mb-1"></i>
-                  <span class="text-[9px] text-slate-500 uppercase font-mono">${item.extension || 'FILE'}</span>
-                </div>`;
-            }
-
-            // Checkbox de seleção se ativo
-            const checkMark = isSelectionMode 
-              ? `<div class="absolute top-2 left-2 w-5 h-5 rounded-md ${isSelected ? 'bg-brand text-white' : 'bg-black/50 text-transparent border border-white/40'} flex items-center justify-center text-xs">
-                   <i class="fa-solid fa-check"></i>
-                 </div>`
-              : '';
-
-            card.innerHTML = `
-              ${checkMark}
-              <div class="flex flex-col items-center text-center py-0.5 flex-1 justify-center min-w-0">
-                ${thumbnailHtml}
-                <div class="font-medium text-[11px] text-slate-200 line-clamp-2 w-full break-words leading-tight" title="${item.name}">${item.name}</div>
-                <div class="text-[10px] text-slate-400 font-mono mt-1">${item.formattedSize}</div>
-              </div>
-
-              <div class="flex items-center pt-2 border-t border-slate-800/60 mt-1 justify-center" onclick="event.stopPropagation()">
-                <a 
-                  href="/api/stream/${item.id}?download=1" 
-                  download 
-                  title="Baixar"
-                  class="w-full py-1.5 bg-slate-800 active:bg-slate-750 text-slate-300 hover:text-white border border-slate-700/70 rounded-lg text-[11px] font-medium transition flex items-center justify-center space-x-1">
-                  <i class="fa-solid fa-download text-[10px]"></i>
-                  <span>Baixar</span>
-                </a>
-              </div>
-            `;
-          }
-
-        } else {
-          // ================= MODO LISTA COMPACTA =================
-          card.className = `p-3 flex items-center justify-between gap-3 hover:bg-slate-800/40 ${isSelected ? 'bg-brand/10' : ''} active:bg-slate-800/70 transition cursor-pointer select-none`;
-
-          if (item.isDirectory) {
-            card.onclick = () => enterFolder(item.id);
-            card.innerHTML = `
-              <div class="flex items-center space-x-3 min-w-0 flex-1">
-                <div class="w-8 h-8 rounded-lg bg-brand/10 text-brand flex items-center justify-center flex-shrink-0">
-                  <i class="fa-solid fa-folder text-base"></i>
-                </div>
-                <div class="min-w-0 flex-1">
-                  <div class="font-medium text-xs sm:text-sm text-slate-100 truncate">${item.name}</div>
-                  <div class="text-[10px] text-slate-500">${item.children ? item.children.length + ' item(ns)' : 'Pasta'}</div>
-                </div>
-              </div>
-              <i class="fa-solid fa-chevron-right text-xs text-slate-600 pl-2"></i>
-            `;
-          } else {
-            card.onclick = () => {
-              if (isSelectionMode) {
-                if (selectedItemIds.has(item.id)) selectedItemIds.delete(item.id);
-                else selectedItemIds.add(item.id);
-                updateBatchUI();
-                renderFolder(currentFolderNode);
-                return;
-              }
-              if (canView) {
-                openPlayer(item.id, encodeURIComponent(item.name), item.subtitleId || '');
-              } else {
-                window.location.href = `/api/stream/${item.id}?download=1`;
-              }
-            };
-
-            const previewIconOrThumb = isImg 
-              ? `<div class="w-8 h-8 rounded-lg overflow-hidden bg-slate-900 border border-slate-800 flex-shrink-0">
-                   <img src="${fullStreamUrl}" alt="${item.name}" loading="lazy" decoding="async" class="w-full h-full object-cover">
-                 </div>`
-              : `<div class="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center flex-shrink-0">
-                   <i class="fa-solid ${iconClass} text-xs"></i>
-                 </div>`;
-
-            const checkMarkList = isSelectionMode
-              ? `<div class="w-4 h-4 rounded ${isSelected ? 'bg-brand text-white' : 'border border-slate-600'} flex items-center justify-center text-[10px] mr-1 flex-shrink-0">
-                   ${isSelected ? '<i class="fa-solid fa-check"></i>' : ''}
-                 </div>`
-              : '';
-
-            card.innerHTML = `
-              <div class="flex items-center space-x-2.5 min-w-0 flex-1">
-                ${checkMarkList}
-                ${previewIconOrThumb}
-                <div class="min-w-0 flex-1">
-                  <div class="font-medium text-xs sm:text-sm text-slate-200 truncate leading-tight">${item.name}</div>
-                  <div class="flex items-center space-x-2 text-[10px] text-slate-400 font-mono mt-0.5">
-                    <span>${item.formattedSize}</span>
-                    <span class="text-slate-600">•</span>
-                    <span>${item.formattedDate ? item.formattedDate.split(' ')[0] : ''}</span>
-                    ${item.subtitleId ? '<span class="text-[9px] bg-yellow-500/20 text-yellow-400 px-1 py-0.5 rounded font-sans">Legenda</span>' : ''}
-                  </div>
-                </div>
-              </div>
-
-              <div onclick="event.stopPropagation()">
-                <a 
-                  href="/api/stream/${item.id}?download=1" 
-                  download 
-                  class="p-2 bg-slate-800/80 active:bg-slate-750 text-slate-400 hover:text-white rounded-lg text-xs font-medium transition inline-flex items-center justify-center">
-                  <i class="fa-solid fa-download text-xs"></i>
-                </a>
-              </div>
-            `;
-          }
-        }
-
+      const initialBatch = currentFolderChildren.slice(0, renderedItemsLimit);
+      initialBatch.forEach(item => {
+        const card = createItemCard(item);
         fileListContainer.appendChild(card);
       });
+    }
+
+    function createItemCard(item) {
+      const card = document.createElement('div');
+      const iconClass = getFileIcon(item.name);
+      const canView = isViewable(item.name);
+      const isImg = isImage(item.name);
+      const isVid = isVideo(item.name);
+      const fullStreamUrl = `${window.location.origin}/api/stream/${item.id}`;
+      const isSelected = selectedItemIds.has(item.id);
+
+      if (currentViewMode === 'grid') {
+        card.className = `bg-darkcard border ${isSelected ? 'border-brand ring-1 ring-brand' : 'border-slate-800/80'} rounded-2xl p-2.5 flex flex-col justify-between transition hover:border-slate-700 active:scale-[0.98] select-none cursor-pointer group shadow-sm relative`;
+
+        if (item.isDirectory) {
+          card.onclick = () => enterFolder(item.id);
+          card.innerHTML = `
+            <div class="flex flex-col items-center text-center py-2 flex-1 justify-center">
+              <div class="w-14 h-14 rounded-2xl bg-brand/10 border border-brand/20 flex items-center justify-center text-brand mb-2 group-hover:scale-105 transition">
+                <i class="fa-solid fa-folder text-3xl"></i>
+              </div>
+              <div class="font-semibold text-xs text-slate-100 line-clamp-2 w-full break-words" title="${item.name}">${item.name}</div>
+              <div class="text-[10px] text-slate-500 mt-1">${item.children ? item.children.length + ' item(ns)' : 'Pasta'}</div>
+            </div>
+          `;
+        } else {
+          card.onclick = () => {
+            if (isSelectionMode) {
+              if (selectedItemIds.has(item.id)) selectedItemIds.delete(item.id);
+              else selectedItemIds.add(item.id);
+              updateBatchUI();
+              renderFolder(currentFolderNode);
+              return;
+            }
+            if (canView) {
+              openPlayer(item.id, encodeURIComponent(item.name), item.subtitleId || '');
+            } else {
+              window.location.href = `/api/stream/${item.id}?download=1`;
+            }
+          };
+
+          let thumbnailHtml = '';
+          if (isImg) {
+            thumbnailHtml = `
+              <div class="w-full h-28 rounded-xl overflow-hidden bg-slate-950 border border-slate-800/80 flex items-center justify-center mb-2 relative group-hover:border-slate-700 transition">
+                <img src="${fullStreamUrl}" alt="${item.name}" loading="lazy" decoding="async" class="w-full h-full object-cover transition-opacity duration-300 opacity-0" onload="this.classList.remove('opacity-0')">
+                <div class="absolute bottom-1.5 right-1.5 bg-black/60 backdrop-blur-sm p-1 rounded-md text-[9px] text-emerald-400 leading-none">
+                  <i class="fa-solid fa-image"></i>
+                </div>
+              </div>`;
+          } else if (isVid) {
+            thumbnailHtml = `
+              <div class="w-full h-28 rounded-xl overflow-hidden bg-gradient-to-tr from-slate-950 via-slate-900 to-indigo-950/40 border border-slate-800/80 flex flex-col items-center justify-center mb-2 relative group-hover:border-slate-700 transition">
+                <div class="w-11 h-11 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mb-1 group-hover:scale-110 transition">
+                  <i class="fa-solid fa-film text-xl"></i>
+                </div>
+                <span class="text-[9px] text-slate-400 uppercase font-mono tracking-wider">${item.extension || 'VIDEO'}</span>
+                <div class="absolute bottom-1.5 right-1.5 bg-black/60 backdrop-blur-sm p-1 rounded-md text-[9px] text-indigo-400 leading-none">
+                  <i class="fa-solid fa-play"></i>
+                </div>
+              </div>`;
+          } else if (isPdf(item.name)) {
+            thumbnailHtml = `
+              <div class="w-full h-28 rounded-xl bg-gradient-to-b from-rose-950/20 to-slate-950 border border-slate-800/80 flex flex-col items-center justify-center mb-2 relative group-hover:border-slate-700 transition">
+                <i class="fa-solid fa-file-pdf text-3xl text-rose-500 mb-1"></i>
+                <span class="text-[9px] text-rose-400 font-semibold uppercase tracking-wider">PDF</span>
+              </div>`;
+          } else {
+            thumbnailHtml = `
+              <div class="w-full h-28 rounded-xl bg-slate-950 border border-slate-800/80 flex flex-col items-center justify-center mb-2 relative group-hover:border-slate-700 transition">
+                <i class="fa-solid ${iconClass} text-2xl mb-1"></i>
+                <span class="text-[9px] text-slate-500 uppercase font-mono">${item.extension || 'FILE'}</span>
+              </div>`;
+          }
+
+          const checkMark = isSelectionMode 
+            ? `<div class="absolute top-2 left-2 w-5 h-5 rounded-md ${isSelected ? 'bg-brand text-white' : 'bg-black/50 text-transparent border border-white/40'} flex items-center justify-center text-xs">
+                 <i class="fa-solid fa-check"></i>
+               </div>`
+            : '';
+
+          card.innerHTML = `
+            ${checkMark}
+            <div class="flex flex-col items-center text-center py-0.5 flex-1 justify-center min-w-0">
+              ${thumbnailHtml}
+              <div class="font-medium text-[11px] text-slate-200 line-clamp-2 w-full break-words leading-tight" title="${item.name}">${item.name}</div>
+              <div class="text-[10px] text-slate-400 font-mono mt-1">${item.formattedSize}</div>
+            </div>
+
+            <div class="flex items-center pt-2 border-t border-slate-800/60 mt-1 justify-center" onclick="event.stopPropagation()">
+              <a 
+                href="/api/stream/${item.id}?download=1" 
+                download 
+                title="Baixar"
+                class="w-full py-1.5 bg-slate-800 active:bg-slate-750 text-slate-300 hover:text-white border border-slate-700/70 rounded-lg text-[11px] font-medium transition flex items-center justify-center space-x-1">
+                <i class="fa-solid fa-download text-[10px]"></i>
+                <span>Baixar</span>
+              </a>
+            </div>
+          `;
+        }
+
+      } else {
+        // Modo Lista
+        card.className = `p-3 flex items-center justify-between gap-3 hover:bg-slate-800/40 ${isSelected ? 'bg-brand/10' : ''} active:bg-slate-800/70 transition cursor-pointer select-none`;
+
+        if (item.isDirectory) {
+          card.onclick = () => enterFolder(item.id);
+          card.innerHTML = `
+            <div class="flex items-center space-x-3 min-w-0 flex-1">
+              <div class="w-8 h-8 rounded-lg bg-brand/10 text-brand flex items-center justify-center flex-shrink-0">
+                <i class="fa-solid fa-folder text-base"></i>
+              </div>
+              <div class="min-w-0 flex-1">
+                <div class="font-medium text-xs sm:text-sm text-slate-100 truncate">${item.name}</div>
+                <div class="text-[10px] text-slate-500">${item.children ? item.children.length + ' item(ns)' : 'Pasta'}</div>
+              </div>
+            </div>
+            <i class="fa-solid fa-chevron-right text-xs text-slate-600 pl-2"></i>
+          `;
+        } else {
+          card.onclick = () => {
+            if (isSelectionMode) {
+              if (selectedItemIds.has(item.id)) selectedItemIds.delete(item.id);
+              else selectedItemIds.add(item.id);
+              updateBatchUI();
+              renderFolder(currentFolderNode);
+              return;
+            }
+            if (canView) {
+              openPlayer(item.id, encodeURIComponent(item.name), item.subtitleId || '');
+            } else {
+              window.location.href = `/api/stream/${item.id}?download=1`;
+            }
+          };
+
+          const previewIconOrThumb = isImg 
+            ? `<div class="w-8 h-8 rounded-lg overflow-hidden bg-slate-900 border border-slate-800 flex-shrink-0">
+                 <img src="${fullStreamUrl}" alt="${item.name}" loading="lazy" decoding="async" class="w-full h-full object-cover">
+               </div>`
+            : `<div class="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center flex-shrink-0">
+                 <i class="fa-solid ${iconClass} text-xs"></i>
+               </div>`;
+
+          const checkMarkList = isSelectionMode
+            ? `<div class="w-4 h-4 rounded ${isSelected ? 'bg-brand text-white' : 'border border-slate-600'} flex items-center justify-center text-[10px] mr-1 flex-shrink-0">
+                 ${isSelected ? '<i class="fa-solid fa-check"></i>' : ''}
+               </div>`
+            : '';
+
+          card.innerHTML = `
+            <div class="flex items-center space-x-2.5 min-w-0 flex-1">
+              ${checkMarkList}
+              ${previewIconOrThumb}
+              <div class="min-w-0 flex-1">
+                <div class="font-medium text-xs sm:text-sm text-slate-200 truncate leading-tight">${item.name}</div>
+                <div class="flex items-center space-x-2 text-[10px] text-slate-400 font-mono mt-0.5">
+                  <span>${item.formattedSize}</span>
+                  <span class="text-slate-600">•</span>
+                  <span>${item.formattedDate ? item.formattedDate.split(' ')[0] : ''}</span>
+                  ${item.subtitleId ? '<span class="text-[9px] bg-yellow-500/20 text-yellow-400 px-1 py-0.5 rounded font-sans">Legenda</span>' : ''}
+                </div>
+              </div>
+            </div>
+
+            <div onclick="event.stopPropagation()">
+              <a 
+                href="/api/stream/${item.id}?download=1" 
+                download 
+                class="p-2 bg-slate-800/80 active:bg-slate-750 text-slate-400 hover:text-white rounded-lg text-xs font-medium transition inline-flex items-center justify-center">
+                <i class="fa-solid fa-download text-xs"></i>
+              </a>
+            </div>
+          `;
+        }
+      }
+
+      return card;
     }
 
     function goBackFolder() {
