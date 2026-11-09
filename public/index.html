@@ -789,17 +789,26 @@
 
         // 1. Verifica no Cache de Memória RAM (0ms)
         if (videoThumbCache.has(videoId)) {
-          applyVideoThumb(container, videoThumbCache.get(videoId));
+          const cached = videoThumbCache.get(videoId);
+          if (typeof cached === 'object' && cached.thumbUrl) {
+            applyVideoThumb(container, cached.thumbUrl, cached.isVertical);
+          } else {
+            applyVideoThumb(container, cached, false);
+          }
           return;
         }
 
         // 2. Verifica no Armazenamento Permanente IndexedDB (idb-keyval)
         try {
           if (window.idbKeyval) {
-            const cachedDbThumb = await idbKeyval.get(`thumb_${videoId}`);
-            if (cachedDbThumb) {
-              videoThumbCache.set(videoId, cachedDbThumb);
-              applyVideoThumb(container, cachedDbThumb);
+            const cachedDb = await idbKeyval.get(`thumb_${videoId}`);
+            if (cachedDb) {
+              videoThumbCache.set(videoId, cachedDb);
+              if (typeof cachedDb === 'object' && cachedDb.thumbUrl) {
+                applyVideoThumb(container, cachedDb.thumbUrl, cachedDb.isVertical);
+              } else {
+                applyVideoThumb(container, cachedDb, false);
+              }
               return;
             }
           }
@@ -811,9 +820,19 @@
       });
     }, { rootMargin: '120px' });
 
-    function applyVideoThumb(container, dataUrl) {
+    function applyVideoThumb(container, dataUrl, isVertical = false) {
+      const badgeHtml = isVertical 
+        ? `<div class="absolute bottom-1 right-1 bg-black/75 backdrop-blur-sm px-1 py-0.5 rounded text-[8px] text-zinc-300 font-mono leading-none border border-zinc-700/60 flex items-center space-x-0.5">
+             <i class="fa-solid fa-mobile-screen-button text-[7px] text-zinc-400"></i>
+             <span>9:16</span>
+           </div>`
+        : `<div class="absolute bottom-1 right-1 bg-black/75 backdrop-blur-sm px-1 py-0.5 rounded text-[8px] text-zinc-400 font-mono leading-none border border-zinc-700/60">
+             16:9
+           </div>`;
+
       container.innerHTML = `
         <img src="${dataUrl}" class="w-full h-full object-cover transition-opacity duration-300 opacity-0" onload="this.classList.remove('opacity-0')">
+        ${badgeHtml}
       `;
     }
 
@@ -848,26 +867,37 @@
 
       video.addEventListener('seeked', () => {
         try {
+          const vw = video.videoWidth || 16;
+          const vh = video.videoHeight || 9;
+          const isVertical = vh > vw; // Detecta 9:16 (vertical/reels/shorts) vs 16:9 (horizontal)
+
           const canvas = document.createElement('canvas');
-          canvas.width = 240;
-          canvas.height = 135;
+          if (isVertical) {
+            canvas.width = 135;
+            canvas.height = 240;
+          } else {
+            canvas.width = 240;
+            canvas.height = 135;
+          }
           const ctx = canvas.getContext('2d');
-          ctx.drawImage(video, 0, 0, 240, 135);
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
           const thumbUrl = canvas.toDataURL('image/jpeg', 0.65);
           
+          const cachePayload = { thumbUrl, isVertical };
+
           // Salva na memória RAM
           if (videoThumbCache.size > 150) {
             const firstKey = videoThumbCache.keys().next().value;
             videoThumbCache.delete(firstKey);
           }
-          videoThumbCache.set(videoId, thumbUrl);
+          videoThumbCache.set(videoId, cachePayload);
 
           // Salva no IndexedDB de forma persistente
           if (window.idbKeyval) {
-            idbKeyval.set(`thumb_${videoId}`, thumbUrl).catch(() => {});
+            idbKeyval.set(`thumb_${videoId}`, cachePayload).catch(() => {});
           }
 
-          applyVideoThumb(container, thumbUrl);
+          applyVideoThumb(container, thumbUrl, isVertical);
         } catch (e) {}
         clearTimeout(timeout);
         cleanup();
