@@ -394,13 +394,25 @@
         
         <!-- Barra de Topo do Modal -->
         <div class="flex items-center justify-between border-b border-zinc-800 px-2 py-2">
-          <div class="flex items-center space-x-2 truncate pr-3">
+          <div class="flex items-center space-x-2 truncate pr-2">
             <span class="p-1 rounded bg-zinc-800 text-zinc-300 text-[10px] font-mono uppercase tracking-wider">Player</span>
             <h3 id="modalTitle" class="font-medium text-xs sm:text-sm text-zinc-200 truncate">Reproduzindo</h3>
           </div>
-          <button id="closeModalBtn" class="text-zinc-400 hover:text-white p-1.5 rounded-lg touch-target flex items-center justify-center bg-zinc-900 border border-zinc-800 active:bg-zinc-800 cursor-pointer">
-            <i class="fa-solid fa-xmark text-lg"></i>
-          </button>
+          <div class="flex items-center space-x-1.5 flex-shrink-0">
+            <!-- Botão Ajuste de Proporção / Zoom de Vídeo -->
+            <button 
+              id="aspectRatioBtn" 
+              onclick="toggleVideoFit()" 
+              title="Ajustar Proporção da Tela (Conter / Preencher / Esticar)"
+              class="hidden px-2 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white text-[11px] font-mono items-center space-x-1 cursor-pointer transition">
+              <i class="fa-solid fa-expand text-[10px]"></i>
+              <span id="aspectRatioLabel">Conter</span>
+            </button>
+
+            <button id="closeModalBtn" class="text-zinc-400 hover:text-white p-1.5 rounded-lg touch-target flex items-center justify-center bg-zinc-900 border border-zinc-800 active:bg-zinc-800 cursor-pointer">
+              <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+          </div>
         </div>
         
         <!-- Área Central de Exibição Expandida -->
@@ -502,6 +514,47 @@
     const mediaPlayerWrapper = document.getElementById('mediaPlayerWrapper');
     const closeModalBtn = document.getElementById('closeModalBtn');
     const galleryCounter = document.getElementById('galleryCounter');
+    const aspectRatioBtn = document.getElementById('aspectRatioBtn');
+    const aspectRatioLabel = document.getElementById('aspectRatioLabel');
+
+    // Modos de Proporção/Zoom de Vídeo: 'contain' (Conter/Original), 'cover' (Preencher tela), 'fill' (Esticar)
+    const fitModes = ['contain', 'cover', 'fill'];
+    const fitLabels = { contain: 'Conter', cover: 'Preencher', fill: 'Esticar' };
+    let currentFitIndex = 0;
+
+    window.toggleVideoFit = () => {
+      currentFitIndex = (currentFitIndex + 1) % fitModes.length;
+      applyVideoFit(fitModes[currentFitIndex]);
+    };
+
+    function applyVideoFit(mode) {
+      aspectRatioLabel.textContent = fitLabels[mode] || 'Conter';
+      const targetVideo = mediaPlayerWrapper.querySelector('video');
+      const plyrContainer = mediaPlayerWrapper.querySelector('.plyr');
+      if (targetVideo) {
+        targetVideo.style.objectFit = mode;
+        if (mode === 'fill') {
+          targetVideo.style.width = '100%';
+          targetVideo.style.height = '100%';
+        } else if (mode === 'cover') {
+          targetVideo.style.width = '100%';
+          targetVideo.style.height = '100%';
+        } else {
+          targetVideo.style.width = '';
+          targetVideo.style.height = '';
+        }
+      }
+      if (plyrContainer) {
+        if (mode === 'cover' || mode === 'fill') {
+          plyrContainer.style.height = '100%';
+          plyrContainer.style.width = '100%';
+        } else {
+          plyrContainer.style.height = '';
+          plyrContainer.style.width = '';
+        }
+      }
+      showToast(`Vídeo: ${fitLabels[mode]}`);
+    }
 
     let rootNode = null;
     let currentFolderNode = null;
@@ -1439,18 +1492,21 @@
       mediaPlayerWrapper.innerHTML = '';
 
       if (isImage(name)) {
+        if (aspectRatioBtn) aspectRatioBtn.classList.add('hidden');
         mediaPlayerWrapper.innerHTML = `
           <div class="w-full h-full flex items-center justify-center p-1 bg-black overflow-hidden select-none">
             <img src="${currentStreamUrl}" alt="${name}" class="max-h-[82vh] max-w-full w-auto h-auto object-contain shadow-2xl transition-transform duration-200">
           </div>
         `;
       } else if (isPdf(name)) {
+        if (aspectRatioBtn) aspectRatioBtn.classList.add('hidden');
         mediaPlayerWrapper.innerHTML = `
           <div class="w-full h-[82vh] bg-slate-900 rounded-lg overflow-hidden">
             <iframe src="${currentStreamUrl}" class="w-full h-full border-0"></iframe>
           </div>
         `;
       } else if (['txt', 'log'].includes(ext)) {
+        if (aspectRatioBtn) aspectRatioBtn.classList.add('hidden');
         mediaPlayerWrapper.innerHTML = `<div class="p-4 text-xs text-slate-400">Carregando visualização...</div>`;
         fetch(currentStreamUrl)
           .then(r => r.text())
@@ -1463,6 +1519,7 @@
             mediaPlayerWrapper.innerHTML = `<div class="p-4 text-xs text-rose-400">Não foi possível carregar a pré-visualização.</div>`;
           });
       } else if (isAudio(name)) {
+        if (aspectRatioBtn) aspectRatioBtn.classList.add('hidden');
         mediaPlayerWrapper.innerHTML = `
           <div class="p-8 w-full flex flex-col items-center justify-center">
             <i class="fa-solid fa-compact-disc fa-spin text-6xl text-brand mb-6"></i>
@@ -1475,6 +1532,13 @@
           controls: ['play', 'progress', 'current-time', 'duration', 'mute', 'volume']
         });
       } else {
+        // Exibe botão de proporção/zoom para vídeos
+        if (aspectRatioBtn) {
+          aspectRatioBtn.classList.remove('hidden');
+          aspectRatioBtn.classList.add('flex');
+        }
+        currentFitIndex = 0;
+        aspectRatioLabel.textContent = 'Conter';
         // Player de Vídeo com Autoplay Imediato e Retomada de Posição
         const video = document.createElement('video');
         video.id = 'playerTarget';
