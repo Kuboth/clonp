@@ -1,6 +1,6 @@
 # clonp
 
-Um jeito simples e direto de abrir pastas e arquivos públicos do MEGA pelo navegador, assistir a vídeos sem baixar tudo antes e fazer downloads sem frescura.
+Um jeito simples e direto de abrir pastas e arquivos públicos do MEGA (alternativa para clonr.co) pelo navegador, assistir a vídeos sem baixar tudo antes e fazer downloads sem frescura.
 
 Criado como uma alternativa leve, rápida e gratuita inspirada no finado clonr.co, pensado para funcionar liso tanto no celular quanto no PC.
 

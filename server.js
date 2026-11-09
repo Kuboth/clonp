@@ -264,19 +264,17 @@ app.get('/api/stream/:id', streamLimiter, async (req, res) => {
       headers['Content-Disposition'] = `inline; filename="${encodeURIComponent(filename)}"`;
     }
 
-    // Opções de aceleração e paralelismo adaptadas para resiliência e velocidade em redes lentas
+    // Opções de aceleração e paralelismo:
+    // Para downloads normais, maxConnections: 1 faz streaming contínuo sem overhead de múltiplos chunks
+    // Se o cliente enviar Range Header (gerenciadores multithread como IDM/Aria2/1DM), ele atende na hora
     const downloadOptions = isDownload ? {
-      maxConnections: 4,          // 4 conexões paralelas por chunk
-      initialChunkSize: 65536,    // 64KB inicial para First-Byte instantâneo mesmo com latência alta
-      chunkSizeIncrement: 131072, // Escala adaptativamente conforme a velocidade do cliente
-      maxChunkSize: 1048576,      // 1MB máximo por conexão
-      handleRetries: 5            // Tolerância a falhas transitórias de conexão
+      maxConnections: 1,          // 1 conexão direta contínua (elimina latência de handshake de múltiplos chunks)
+      initialChunkSize: 524288,
+      forceHttps: true
     } : {
-      maxConnections: 4,          // Para streaming
-      initialChunkSize: 65536,    // Início relâmpago de streaming (64KB)
-      chunkSizeIncrement: 131072, // Aumenta o buffer conforme o player consome
-      maxChunkSize: 1048576,
-      handleRetries: 5
+      maxConnections: 1,          // Para streaming de vídeo/áudio, início instantâneo
+      initialChunkSize: 262144,
+      forceHttps: true
     };
 
     const range = req.headers.range;

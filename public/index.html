@@ -693,15 +693,13 @@
 
     window.triggerDownload = (id) => {
       const url = `/api/stream/${id}?download=1`;
-      let iframe = document.getElementById('downloadFrame');
-      if (!iframe) {
-        iframe = document.createElement('iframe');
-        iframe.id = 'downloadFrame';
-        iframe.name = 'downloadFrameTarget';
-        iframe.style.display = 'none';
-        document.body.appendChild(iframe);
-      }
-      iframe.src = url;
+      showToast('Iniciando transferência...');
+      const a = document.createElement('a');
+      a.href = url;
+      a.setAttribute('download', '');
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => document.body.removeChild(a), 100);
     };
 
     window.downloadSelectedBatch = async () => {
