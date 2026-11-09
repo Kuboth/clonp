@@ -1,5 +1,7 @@
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 const mime = require('mime-types');
 const archiver = require('archiver');
@@ -10,13 +12,57 @@ const { File } = require('megajs');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Configuração de Proxy confiável (Render / PaaS)
+app.set('trust proxy', 1);
+
+// 1. Cabeçalhos de Segurança HTTP (Helmet com liberação para mídia e CDN)
+app.use(
+  helmet({
+    contentSecurityPolicy: false, // Permite CDNs de Tailwind, Plyr e FontAwesome
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    crossOriginEmbedderPolicy: false
+  })
+);
+
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '200kb' })); // Limita payload de JSON contra ataques de overflow
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Cache em memória de instâncias de arquivos/pastas
+// 2. Rate Limiting (Proteção contra DoS / Abuso)
+const inspectLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 100, // Limite de 100 inspeções por IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Muitas requisições. Aguarde alguns minutos antes de tentar novamente.' }
+});
+
+const streamLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 600, // Permite múltiplos chunks para streams e Range requests
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// 3. Cache em memória com TTL (Auto-limpeza para evitar estouro de RAM no Render)
+const CACHE_TTL_MS = 2 * 60 * 60 * 1000; // 2 horas de vida útil
 const fileInstancesCache = new Map();
 const folderCache = new Map();
+
+// Rotina periódica a cada 15 minutos para remover itens expirados
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, val] of fileInstancesCache.entries()) {
+    if (now - val.cachedAt > CACHE_TTL_MS) {
+      fileInstancesCache.delete(key);
+    }
+  }
+  for (const [key, val] of folderCache.entries()) {
+    if (now - val.cachedAt > CACHE_TTL_MS) {
+      folderCache.delete(key);
+    }
+  }
+}, 15 * 60 * 1000);
 
 // Gerenciador de Proxies Gratuitos
 let freeProxies = [];
@@ -54,8 +100,13 @@ function formatBytes(bytes, decimals = 2) {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 }
 
-// 1. Rota de inspeção do link com preservação de datas e atributos
-app.post('/api/inspect', async (req, res) => {
+// Sanitização de nomes de arquivos para evitar quebra de cabeçalho HTTP
+function sanitizeFilename(name) {
+  return (name || 'download').replace(/[\r\n\t"']/g, '_');
+}
+
+// 1. Rota de inspeção do link (Protegida por Rate Limit)
+app.post('/api/inspect', inspectLimiter, async (req, res) => {
   const { url } = req.body;
   if (!url || typeof url !== 'string' || !url.includes('mega.nz')) {
     return res.status(400).json({ error: 'URL do MEGA inválida. Certifique-se de que contenha a chave (#chave).' });
@@ -65,15 +116,16 @@ app.post('/api/inspect', async (req, res) => {
     const fileOrFolder = File.fromURL(url);
     await fileOrFolder.loadAttributes();
 
+    const now = Date.now();
+
     if (fileOrFolder.directory) {
       const folderKey = `folder_${Date.now()}_${Math.random().toString(36).substring(7)}`;
       const allFiles = [];
 
       const buildTree = (node, currentPath = '') => {
         const nodeId = `${node.downloadId || node.nodeId || Math.random().toString(36).substring(7)}`;
-        fileInstancesCache.set(nodeId, node);
+        fileInstancesCache.set(nodeId, { instance: node, cachedAt: now });
 
-        // Extrai timestamp se disponível (MEGA armazena timestamp em segundos)
         const timestamp = node.timestamp ? node.timestamp * 1000 : (node.mtime ? new Date(node.mtime).getTime() : Date.now());
         const ext = node.directory ? 'folder' : (node.name.split('.').pop() || '').toLowerCase();
 
@@ -105,7 +157,7 @@ app.post('/api/inspect', async (req, res) => {
 
       const rootTree = buildTree(fileOrFolder, '');
 
-      // Parear legendas .srt/.vtt automaticamente com vídeos em qualquer pasta
+      // Parear legendas .srt/.vtt com vídeos
       const subtitles = allFiles.filter(it => it.name.endsWith('.srt') || it.name.endsWith('.vtt'));
       for (const item of allFiles) {
         const ext = item.name.split('.').pop().toLowerCase();
@@ -118,7 +170,7 @@ app.post('/api/inspect', async (req, res) => {
         }
       }
 
-      folderCache.set(folderKey, { name: fileOrFolder.name || 'pasta', items: allFiles });
+      folderCache.set(folderKey, { name: fileOrFolder.name || 'pasta', items: allFiles, cachedAt: now });
 
       return res.json({
         type: 'folder',
@@ -129,7 +181,7 @@ app.post('/api/inspect', async (req, res) => {
       });
     } else {
       const cacheKey = `${fileOrFolder.downloadId || fileOrFolder.nodeId || Math.random().toString(36).substring(7)}`;
-      fileInstancesCache.set(cacheKey, fileOrFolder);
+      fileInstancesCache.set(cacheKey, { instance: fileOrFolder, cachedAt: now });
 
       const timestamp = fileOrFolder.timestamp ? fileOrFolder.timestamp * 1000 : Date.now();
       const ext = (fileOrFolder.name.split('.').pop() || '').toLowerCase();
@@ -168,18 +220,22 @@ app.post('/api/inspect', async (req, res) => {
   }
 });
 
-// 2. Rota de streaming e download individual com Range (HTTP 206)
-app.get('/api/stream/:id', async (req, res) => {
+// 2. Rota de streaming e download individual (Protegida por Rate Limit)
+app.get('/api/stream/:id', streamLimiter, async (req, res) => {
   const { id } = req.params;
   const isDownload = req.query.download === '1';
 
-  const file = fileInstancesCache.get(id);
-  if (!file) {
+  const cached = fileInstancesCache.get(id);
+  if (!cached || !cached.instance) {
     return res.status(404).json({ error: 'Arquivo expirado ou não encontrado no cache. Inspecione o link novamente.' });
   }
 
+  // Renova o TTL do arquivo que está sendo baixado/assistido
+  cached.cachedAt = Date.now();
+  const file = cached.instance;
+
   try {
-    const filename = file.name || 'download';
+    const filename = sanitizeFilename(file.name);
     const mimeType = mime.lookup(filename) || 'application/octet-stream';
     const fileSize = file.size;
 
@@ -233,19 +289,19 @@ app.get('/api/stream/:id', async (req, res) => {
   }
 });
 
-// 3. Rota de conversão e streaming de legenda para WebVTT (Plyr)
-app.get('/api/subtitles/:id', (req, res) => {
+// 3. Rota de conversão e streaming de legenda para WebVTT
+app.get('/api/subtitles/:id', streamLimiter, (req, res) => {
   const { id } = req.params;
-  const file = fileInstancesCache.get(id);
+  const cached = fileInstancesCache.get(id);
 
-  if (!file) {
+  if (!cached || !cached.instance) {
     return res.status(404).send('Legenda não encontrada.');
   }
 
   res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
-  const stream = file.download();
+  const stream = cached.instance.download();
 
-  if (file.name.endsWith('.srt')) {
+  if (cached.instance.name.endsWith('.srt')) {
     stream.pipe(srt2vtt()).pipe(res);
   } else {
     stream.pipe(res);
@@ -253,7 +309,7 @@ app.get('/api/subtitles/:id', (req, res) => {
 });
 
 // 4. Rota de download completo da pasta (.ZIP) em tempo real
-app.get('/api/download-folder/:folderKey', async (req, res) => {
+app.get('/api/download-folder/:folderKey', streamLimiter, async (req, res) => {
   const { folderKey } = req.params;
   const folderData = folderCache.get(folderKey);
 
@@ -265,7 +321,7 @@ app.get('/api/download-folder/:folderKey', async (req, res) => {
     zlib: { level: 0 }
   });
 
-  const zipName = `${folderData.name || 'mega_folder'}.zip`;
+  const zipName = `${sanitizeFilename(folderData.name || 'mega_folder')}.zip`;
   res.attachment(zipName);
 
   archive.pipe(res);
@@ -278,9 +334,9 @@ app.get('/api/download-folder/:folderKey', async (req, res) => {
   try {
     for (const item of folderData.items) {
       if (!item.isDirectory) {
-        const fileInstance = fileInstancesCache.get(item.id);
-        if (fileInstance) {
-          const fileStream = fileInstance.download();
+        const cached = fileInstancesCache.get(item.id);
+        if (cached && cached.instance) {
+          const fileStream = cached.instance.download();
           archive.append(fileStream, { name: item.path });
         }
       }
@@ -301,7 +357,7 @@ app.get('/api/proxy-status', async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`===============================================`);
-  console.log(` Clonr Pro rodando com sucesso!`);
-  console.log(` Acesse: http://localhost:${PORT}`);
+  console.log(` Clonp rodando com sucesso e protegido!`);
+  console.log(` Porta: ${PORT}`);
   console.log(`===============================================`);
 });
