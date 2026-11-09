@@ -2,17 +2,12 @@
 <html lang="pt-BR" class="dark">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="color-scheme" content="dark" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#09090b" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="Clonp" />
-  <meta name="mobile-web-app-capable" content="yes" />
   <link rel="manifest" href="/manifest.json" />
-  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
   <title>Clonp — Debrid & Media Player</title>
   
   <!-- Fontes de Alta Fidelidade: Inter & JetBrains Mono -->
@@ -49,67 +44,22 @@
   
   <style>
     :root {
-      color-scheme: dark;
       --plyr-color-main: #ef4444;
-    }
-    html {
-      color-scheme: dark;
-      background-color: #09090b;
-    }
-    html, body {
-      overscroll-behavior-y: none;
-      -webkit-tap-highlight-color: transparent;
-      background-color: #09090b;
-      color: #fafafa;
     }
     body {
       background-color: #09090b;
       color: #fafafa;
-      padding-top: env(safe-area-inset-top);
       padding-bottom: env(safe-area-inset-bottom);
-      padding-left: env(safe-area-inset-left);
-      padding-right: env(safe-area-inset-right);
+      -webkit-tap-highlight-color: transparent;
       letter-spacing: -0.011em;
-      min-height: 100dvh;
-    }
-    /* Touch target, callout and manipulation */
-    button, a, input, select, textarea, [role="button"], .touch-target {
-      touch-action: manipulation;
-    }
-    button, [role="button"], nav, .touch-target {
-      -webkit-touch-callout: none;
-      user-select: none;
-    }
-    /* iOS input auto-zoom prevention: ensure 16px minimum on touch */
-    @media (pointer: coarse) {
-      input, select, textarea, #urlInput {
-        font-size: 16px !important;
-      }
-    }
-    /* Sticky hover fix: only enable hover transformations when pointer is fine and hover is supported */
-    @media (hover: none) and (pointer: coarse) {
-      *:hover {
-        background-color: initial !important;
-        color: initial !important;
-        border-color: initial !important;
-        transform: none !important;
-      }
-      /* Maintain active tactile feedback on touch devices */
-      button:active, a:active, [role="button"]:active {
-        opacity: 0.75;
-      }
     }
     .touch-target {
-      min-height: 44px;
-      min-width: 44px;
+      min-height: 40px;
+      min-width: 40px;
     }
     .plyr--video {
       border-radius: 0.75rem;
       overflow: hidden;
-    }
-    /* Contain overscroll on internal scroll areas */
-    #recentLinksContainer, #breadcrumbs, #fileListContainer, #sortDropdown {
-      overscroll-behavior: contain;
     }
     ::-webkit-scrollbar {
       width: 4px;
@@ -144,7 +94,7 @@
     }
   </style>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-[100dvh] flex flex-col font-sans antialiased selection:bg-zinc-800 selection:text-white pb-6">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen flex flex-col font-sans antialiased selection:bg-zinc-800 selection:text-white pb-6 select-none">
 
   <!-- Header Minimalista Estilo Vercel/Linear -->
   <header class="border-b border-zinc-800/80 bg-zinc-950/75 backdrop-blur-xl sticky top-0 z-50 px-4 py-2.5">
@@ -389,30 +339,18 @@
     </div>
 
     <!-- Modal de Visualizador Tela Cheia (Swipe Gallery & Resumo de Vídeo) -->
-    <div id="mediaModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-0 bg-black/95 backdrop-blur-md" style="overscroll-behavior: contain;">
-      <div class="bg-zinc-950 sm:border border-zinc-800 rounded-none sm:rounded-2xl max-w-5xl w-full h-[100dvh] sm:h-auto sm:max-h-[92dvh] p-2 sm:p-4 relative shadow-2xl flex flex-col justify-between">
+    <div id="mediaModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-0 bg-black/95 backdrop-blur-md">
+      <div class="bg-zinc-950 sm:border border-zinc-800 rounded-none sm:rounded-2xl max-w-5xl w-full h-full sm:h-auto sm:max-h-[92vh] p-2 sm:p-4 relative shadow-2xl flex flex-col justify-between">
         
         <!-- Barra de Topo do Modal -->
         <div class="flex items-center justify-between border-b border-zinc-800 px-2 py-2">
-          <div class="flex items-center space-x-2 truncate pr-2">
+          <div class="flex items-center space-x-2 truncate pr-3">
             <span class="p-1 rounded bg-zinc-800 text-zinc-300 text-[10px] font-mono uppercase tracking-wider">Player</span>
             <h3 id="modalTitle" class="font-medium text-xs sm:text-sm text-zinc-200 truncate">Reproduzindo</h3>
           </div>
-          <div class="flex items-center space-x-1.5 flex-shrink-0">
-            <!-- Botão Ajuste de Proporção / Zoom de Vídeo -->
-            <button 
-              id="aspectRatioBtn" 
-              onclick="toggleVideoFit()" 
-              title="Ajustar Proporção da Tela (Conter / Preencher / Esticar)"
-              class="hidden px-2 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white text-[11px] font-mono items-center space-x-1 cursor-pointer transition">
-              <i class="fa-solid fa-expand text-[10px]"></i>
-              <span id="aspectRatioLabel">Conter</span>
-            </button>
-
-            <button id="closeModalBtn" class="text-zinc-400 hover:text-white p-1.5 rounded-lg touch-target flex items-center justify-center bg-zinc-900 border border-zinc-800 active:bg-zinc-800 cursor-pointer">
-              <i class="fa-solid fa-xmark text-lg"></i>
-            </button>
-          </div>
+          <button id="closeModalBtn" class="text-zinc-400 hover:text-white p-1.5 rounded-lg touch-target flex items-center justify-center bg-zinc-900 border border-zinc-800 active:bg-zinc-800 cursor-pointer">
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
         </div>
         
         <!-- Área Central de Exibição Expandida -->
@@ -462,14 +400,6 @@
 
     let deferredPrompt = null;
     const pwaInstallBtn = document.getElementById('pwaInstallBtn');
-
-    // Detecta se já está rodando em modo App (Standalone)
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-    if (!isStandalone) {
-      // Exibe botão de instalação para facilitar acesso tanto no Android quanto no iOS
-      pwaInstallBtn.classList.remove('hidden');
-    }
-
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       deferredPrompt = e;
@@ -484,14 +414,6 @@
           pwaInstallBtn.classList.add('hidden');
         }
         deferredPrompt = null;
-      } else {
-        // Instrução visual para iOS / navegadores sem suporte ao evento direto
-        const isIos = /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
-        if (isIos) {
-          showToast('Toque em Compartilhar e depois "Adicionar à Tela de Início"');
-        } else {
-          showToast('Abra as opções do navegador (⋮) e toque em "Instalar aplicativo"');
-        }
       }
     });
 
@@ -514,47 +436,6 @@
     const mediaPlayerWrapper = document.getElementById('mediaPlayerWrapper');
     const closeModalBtn = document.getElementById('closeModalBtn');
     const galleryCounter = document.getElementById('galleryCounter');
-    const aspectRatioBtn = document.getElementById('aspectRatioBtn');
-    const aspectRatioLabel = document.getElementById('aspectRatioLabel');
-
-    // Modos de Proporção/Zoom de Vídeo: 'contain' (Conter/Original), 'cover' (Preencher tela), 'fill' (Esticar)
-    const fitModes = ['contain', 'cover', 'fill'];
-    const fitLabels = { contain: 'Conter', cover: 'Preencher', fill: 'Esticar' };
-    let currentFitIndex = 0;
-
-    window.toggleVideoFit = () => {
-      currentFitIndex = (currentFitIndex + 1) % fitModes.length;
-      applyVideoFit(fitModes[currentFitIndex]);
-    };
-
-    function applyVideoFit(mode) {
-      aspectRatioLabel.textContent = fitLabels[mode] || 'Conter';
-      const targetVideo = mediaPlayerWrapper.querySelector('video');
-      const plyrContainer = mediaPlayerWrapper.querySelector('.plyr');
-      if (targetVideo) {
-        targetVideo.style.objectFit = mode;
-        if (mode === 'fill') {
-          targetVideo.style.width = '100%';
-          targetVideo.style.height = '100%';
-        } else if (mode === 'cover') {
-          targetVideo.style.width = '100%';
-          targetVideo.style.height = '100%';
-        } else {
-          targetVideo.style.width = '';
-          targetVideo.style.height = '';
-        }
-      }
-      if (plyrContainer) {
-        if (mode === 'cover' || mode === 'fill') {
-          plyrContainer.style.height = '100%';
-          plyrContainer.style.width = '100%';
-        } else {
-          plyrContainer.style.height = '';
-          plyrContainer.style.width = '';
-        }
-      }
-      showToast(`Vídeo: ${fitLabels[mode]}`);
-    }
 
     let rootNode = null;
     let currentFolderNode = null;
@@ -890,57 +771,10 @@
       }
     });
 
-    // Fila concorrente controlada para gerar miniaturas de vídeo com cache em 2 camadas (LRU em RAM + IndexedDB permanente)
+    // Fila sequencial e controlada para gerar miniaturas de vídeo com cache em 2 camadas (LRU em RAM + IndexedDB permanente)
     const videoThumbQueue = [];
-    const MAX_CONCURRENT_VIDEO_THUMBS = 2; // Processa 2 vídeos por vez sem travar conexões
-    let activeVideoThumbWorkers = 0;
+    let isProcessingVideoThumb = false;
     const videoThumbCache = new Map(); // Camada 1: RAM (LRU)
-    const imgThumbCache = new Map();   // Cache de imagens em RAM
-
-    // Carregador com cache em IndexedDB para imagens
-    async function loadCachedImage(imgElement, streamUrl, fileId) {
-      if (!fileId) {
-        imgElement.src = streamUrl;
-        return;
-      }
-
-      // 1. Memória RAM
-      if (imgThumbCache.has(fileId)) {
-        imgElement.src = imgThumbCache.get(fileId);
-        return;
-      }
-
-      // 2. IndexedDB (Persistente no navegador)
-      try {
-        if (window.idbKeyval) {
-          const cachedBlob = await idbKeyval.get(`img_${fileId}`);
-          if (cachedBlob) {
-            const objectUrl = URL.createObjectURL(cachedBlob);
-            imgThumbCache.set(fileId, objectUrl);
-            imgElement.src = objectUrl;
-            return;
-          }
-        }
-      } catch (e) {}
-
-      // 3. Busca da rede e salva no IndexedDB
-      try {
-        const resp = await fetch(streamUrl);
-        if (resp.ok) {
-          const blob = await resp.blob();
-          const objectUrl = URL.createObjectURL(blob);
-          imgThumbCache.set(fileId, objectUrl);
-          imgElement.src = objectUrl;
-          if (window.idbKeyval && blob.size < 5 * 1024 * 1024) { // salva se for menor que 5MB
-            idbKeyval.set(`img_${fileId}`, blob).catch(() => {});
-          }
-        } else {
-          imgElement.src = streamUrl;
-        }
-      } catch (err) {
-        imgElement.src = streamUrl;
-      }
-    }
 
     const videoThumbObserver = new IntersectionObserver((entries, observer) => {
       entries.forEach(async (entry) => {
@@ -980,15 +814,12 @@
 
         // 3. Se não tem em nenhum dos caches, adiciona na fila de geração client-side
         videoThumbQueue.push({ videoId, container });
-        scheduleNextVideoThumbs();
+        processNextVideoThumb();
       });
-    }, { rootMargin: '300px' });
+    }, { rootMargin: '120px' });
 
     function applyVideoThumb(container, dataUrl, isVertical = false) {
-      const isMiniList = container.classList.contains('w-8');
-      const badgeHtml = isMiniList
-        ? ''
-        : isVertical 
+      const badgeHtml = isVertical 
         ? `<div class="absolute bottom-1 right-1 bg-black/75 backdrop-blur-sm px-1 py-0.5 rounded text-[8px] text-zinc-300 font-mono leading-none border border-zinc-700/60 flex items-center space-x-0.5">
              <i class="fa-solid fa-mobile-screen-button text-[7px] text-zinc-400"></i>
              <span>9:16</span>
@@ -1003,21 +834,15 @@
       `;
     }
 
-    function scheduleNextVideoThumbs() {
-      while (activeVideoThumbWorkers < MAX_CONCURRENT_VIDEO_THUMBS && videoThumbQueue.length > 0) {
-        processNextVideoThumb();
-      }
-    }
-
     function processNextVideoThumb() {
-      if (videoThumbQueue.length === 0) return;
-      activeVideoThumbWorkers++;
+      if (isProcessingVideoThumb || videoThumbQueue.length === 0) return;
+      isProcessingVideoThumb = true;
 
       const { videoId, container } = videoThumbQueue.shift();
       const video = document.createElement('video');
       video.muted = true;
       video.playsInline = true;
-      video.preload = 'metadata';
+      video.preload = 'auto';
 
       let cleanedUp = false;
       const cleanup = () => {
@@ -1026,11 +851,11 @@
         video.src = '';
         video.load();
         video.remove();
-        activeVideoThumbWorkers--;
-        setTimeout(scheduleNextVideoThumbs, 30);
+        isProcessingVideoThumb = false;
+        setTimeout(processNextVideoThumb, 40);
       };
 
-      const timeout = setTimeout(cleanup, 6000);
+      const timeout = setTimeout(cleanup, 5000);
 
       const captureFrame = () => {
         try {
@@ -1057,7 +882,7 @@
           
           const cachePayload = { thumbUrl, isVertical };
 
-          if (videoThumbCache.size > 200) {
+          if (videoThumbCache.size > 150) {
             const firstKey = videoThumbCache.keys().next().value;
             videoThumbCache.delete(firstKey);
           }
@@ -1131,7 +956,7 @@
       breadcrumbs.scrollLeft = breadcrumbs.scrollWidth;
     }
 
-    let renderedItemsLimit = 500; // Renderiza os itens para garantir que a galeria e miniaturas fiquem disponíveis
+    let renderedItemsLimit = 40; // Renderiza os primeiros 40 arquivos para carga instantânea
     let currentFolderChildren = [];
 
     // Scroll infinito para carregar mais itens suavemente sem travar o celular
@@ -1156,7 +981,7 @@
       fileListContainer.innerHTML = '';
       currentFolderChildren = folderNode.children || [];
       currentFolderChildren = sortItems(currentFolderChildren);
-      renderedItemsLimit = 500;
+      renderedItemsLimit = 40;
 
       // Atualiza lista de itens visualizáveis para a galeria swipe
       viewableItemsList = currentFolderChildren.filter(c => !c.isDirectory && isViewable(c.name));
@@ -1248,7 +1073,7 @@
           if (isImg) {
             thumbnailHtml = `
               <div class="w-full h-28 rounded-lg overflow-hidden bg-zinc-950 border border-zinc-800/90 flex items-center justify-center mb-2 relative group-hover:border-zinc-700 transition">
-                <img data-img-stream="${fullStreamUrl}" data-file-id="${item.id}" alt="${item.name}" loading="lazy" decoding="async" class="cached-img-target w-full h-full object-cover" onerror="this.parentElement.innerHTML='<div class=\\'flex flex-col items-center justify-center text-zinc-500 text-[10px]\\'><i class=\\'fa-solid fa-image text-xl mb-1 text-zinc-600\\'></i><span>IMG</span></div>'">
+                <img src="${fullStreamUrl}" alt="${item.name}" loading="lazy" decoding="async" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='<div class=\\'flex flex-col items-center justify-center text-zinc-500 text-[10px]\\'><i class=\\'fa-solid fa-image text-xl mb-1 text-zinc-600\\'></i><span>IMG</span></div>'">
                 <div class="absolute bottom-1 right-1 bg-black/70 backdrop-blur-sm px-1 py-0.5 rounded text-[9px] text-zinc-300 font-mono leading-none">
                   IMG
                 </div>
@@ -1336,14 +1161,10 @@
           };
 
           const previewIconOrThumb = isImg 
-            ? `<div class="w-8 h-8 rounded-md overflow-hidden bg-zinc-950 border border-zinc-800 flex-shrink-0">
-                 <img data-img-stream="${fullStreamUrl}" data-file-id="${item.id}" alt="${item.name}" loading="lazy" decoding="async" class="cached-img-target w-full h-full object-cover">
+            ? `<div class="w-7 h-7 rounded-md overflow-hidden bg-zinc-950 border border-zinc-800 flex-shrink-0">
+                 <img src="${fullStreamUrl}" alt="${item.name}" loading="lazy" decoding="async" class="w-full h-full object-cover">
                </div>`
-            : isVid
-            ? `<div class="video-thumb-container w-8 h-8 rounded-md overflow-hidden bg-zinc-950 border border-zinc-800 flex items-center justify-center flex-shrink-0 relative" data-video-id="${item.id}">
-                 <i class="fa-solid fa-play text-[10px] text-zinc-500"></i>
-               </div>`
-            : `<div class="w-8 h-8 rounded-md bg-zinc-900 border border-zinc-800 flex items-center justify-center flex-shrink-0">
+            : `<div class="w-7 h-7 rounded-md bg-zinc-900 border border-zinc-800 flex items-center justify-center flex-shrink-0">
                  <i class="fa-solid ${iconClass} text-xs"></i>
                </div>`;
 
@@ -1383,11 +1204,6 @@
       const videoThumbTarget = card.querySelector('.video-thumb-container');
       if (videoThumbTarget) {
         videoThumbObserver.observe(videoThumbTarget);
-      }
-
-      const imgThumbTarget = card.querySelector('.cached-img-target');
-      if (imgThumbTarget) {
-        loadCachedImage(imgThumbTarget, imgThumbTarget.dataset.imgStream, imgThumbTarget.dataset.fileId);
       }
 
       return card;
@@ -1499,21 +1315,18 @@
       mediaPlayerWrapper.innerHTML = '';
 
       if (isImage(name)) {
-        if (aspectRatioBtn) aspectRatioBtn.classList.add('hidden');
         mediaPlayerWrapper.innerHTML = `
           <div class="w-full h-full flex items-center justify-center p-1 bg-black overflow-hidden select-none">
             <img src="${currentStreamUrl}" alt="${name}" class="max-h-[82vh] max-w-full w-auto h-auto object-contain shadow-2xl transition-transform duration-200">
           </div>
         `;
       } else if (isPdf(name)) {
-        if (aspectRatioBtn) aspectRatioBtn.classList.add('hidden');
         mediaPlayerWrapper.innerHTML = `
           <div class="w-full h-[82vh] bg-slate-900 rounded-lg overflow-hidden">
             <iframe src="${currentStreamUrl}" class="w-full h-full border-0"></iframe>
           </div>
         `;
       } else if (['txt', 'log'].includes(ext)) {
-        if (aspectRatioBtn) aspectRatioBtn.classList.add('hidden');
         mediaPlayerWrapper.innerHTML = `<div class="p-4 text-xs text-slate-400">Carregando visualização...</div>`;
         fetch(currentStreamUrl)
           .then(r => r.text())
@@ -1526,7 +1339,6 @@
             mediaPlayerWrapper.innerHTML = `<div class="p-4 text-xs text-rose-400">Não foi possível carregar a pré-visualização.</div>`;
           });
       } else if (isAudio(name)) {
-        if (aspectRatioBtn) aspectRatioBtn.classList.add('hidden');
         mediaPlayerWrapper.innerHTML = `
           <div class="p-8 w-full flex flex-col items-center justify-center">
             <i class="fa-solid fa-compact-disc fa-spin text-6xl text-brand mb-6"></i>
@@ -1539,22 +1351,12 @@
           controls: ['play', 'progress', 'current-time', 'duration', 'mute', 'volume']
         });
       } else {
-        // Exibe botão de proporção/zoom para vídeos
-        if (aspectRatioBtn) {
-          aspectRatioBtn.classList.remove('hidden');
-          aspectRatioBtn.classList.add('flex');
-        }
-        currentFitIndex = 0;
-        aspectRatioLabel.textContent = 'Conter';
         // Player de Vídeo com Autoplay Imediato e Retomada de Posição
         const video = document.createElement('video');
         video.id = 'playerTarget';
         video.controls = true;
         video.autoplay = true;
-        video.muted = false;
         video.playsInline = true;
-        video.setAttribute('playsinline', '');
-        video.setAttribute('webkit-playsinline', '');
         video.preload = 'auto';
         video.className = 'w-full max-h-[82vh] object-contain';
 
@@ -1625,23 +1427,10 @@
           lastTapSide = side;
         });
 
-        // Disparo imediato e persistente de reprodução assim que o usuário clica no vídeo
-        const forcePlay = () => {
-          if (video && video.paused) {
-            const playPromise = video.play();
-            if (playPromise !== undefined) {
-              playPromise.catch(() => {
-                // Se o navegador bloquear áudio no primeiro clique, inicia mudo e desmuta suavemente
-                video.muted = true;
-                video.play().catch(() => {});
-              });
-            }
-          }
-        };
-
-        video.addEventListener('canplay', forcePlay, { once: true });
-        video.addEventListener('loadeddata', forcePlay, { once: true });
-        setTimeout(forcePlay, 100);
+        // Disparo imediato de reprodução assim que tiver dados prontos
+        activePlyr.on('canplay', () => {
+          activePlyr.play().catch(() => {});
+        });
 
         // Lembrar última posição assistida
         const resumeStorageKey = `clonp_resume_${id}`;
@@ -1652,10 +1441,8 @@
             activePlyr.currentTime = parseFloat(savedTime);
             showToast(`Retomando aos ${Math.floor(parseFloat(savedTime) / 60)}m${Math.floor(parseFloat(savedTime) % 60)}s`);
           }
-          forcePlay();
+          activePlyr.play().catch(() => {});
         });
-
-        activePlyr.on('canplay', forcePlay);
 
         activePlyr.on('timeupdate', () => {
           if (activePlyr.currentTime > 5) {
