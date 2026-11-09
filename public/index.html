@@ -429,6 +429,11 @@
       return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext);
     }
 
+    function isVideo(filename) {
+      const ext = filename.split('.').pop().toLowerCase();
+      return ['mp4', 'webm', 'mov'].includes(ext);
+    }
+
     function isPdf(filename) {
       return filename.toLowerCase().endsWith('.pdf');
     }
@@ -571,18 +576,19 @@
         const iconClass = getFileIcon(item.name);
         const canView = isViewable(item.name);
         const isImg = isImage(item.name);
+        const isVid = isVideo(item.name);
         const fullStreamUrl = `${window.location.origin}/api/stream/${item.id}`;
 
         if (currentViewMode === 'grid') {
           // ================= MODO GRADE =================
-          card.className = 'bg-darkcard border border-slate-800/80 rounded-xl p-2.5 flex flex-col justify-between transition hover:border-slate-700 active:scale-[0.98] select-none cursor-pointer';
+          card.className = 'bg-darkcard border border-slate-800/80 rounded-2xl p-2.5 flex flex-col justify-between transition hover:border-slate-700 active:scale-[0.98] select-none cursor-pointer group shadow-sm';
 
           if (item.isDirectory) {
             card.onclick = () => enterFolder(item.id);
             card.innerHTML = `
               <div class="flex flex-col items-center text-center py-2 flex-1 justify-center">
-                <div class="w-12 h-12 rounded-2xl bg-brand/10 border border-brand/20 flex items-center justify-center text-brand mb-2">
-                  <i class="fa-solid fa-folder text-2xl"></i>
+                <div class="w-14 h-14 rounded-2xl bg-brand/10 border border-brand/20 flex items-center justify-center text-brand mb-2 group-hover:scale-105 transition">
+                  <i class="fa-solid fa-folder text-3xl"></i>
                 </div>
                 <div class="font-semibold text-xs text-slate-100 line-clamp-2 w-full break-words" title="${item.name}">${item.name}</div>
                 <div class="text-[10px] text-slate-500 mt-1">${item.children ? item.children.length + ' item(ns)' : 'Pasta'}</div>
@@ -598,16 +604,47 @@
               }
             };
 
-            const thumbnailHtml = isImg 
-              ? `<div class="w-full h-24 rounded-xl overflow-hidden bg-slate-900 border border-slate-800 flex items-center justify-center mb-1.5">
-                   <img src="${fullStreamUrl}" alt="${item.name}" loading="lazy" class="w-full h-full object-cover">
-                 </div>`
-              : `<div class="w-11 h-11 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center mb-1.5 flex-shrink-0">
-                   <i class="fa-solid ${iconClass} text-lg"></i>
-                 </div>`;
+            let thumbnailHtml = '';
+
+            if (isImg) {
+              // Miniatura de imagem real com indicador de carregamento
+              thumbnailHtml = `
+                <div class="w-full h-28 rounded-xl overflow-hidden bg-slate-950 border border-slate-800/80 flex items-center justify-center mb-2 relative group-hover:border-slate-700 transition">
+                  <img src="${fullStreamUrl}" alt="${item.name}" loading="lazy" class="w-full h-full object-cover">
+                  <div class="absolute bottom-1.5 right-1.5 bg-black/60 backdrop-blur-sm p-1 rounded-md text-[9px] text-emerald-400 leading-none">
+                    <i class="fa-solid fa-image"></i>
+                  </div>
+                </div>`;
+            } else if (isVid) {
+              // Prévia de vídeo real via elemento de vídeo HTML5 com Range Request
+              thumbnailHtml = `
+                <div class="w-full h-28 rounded-xl overflow-hidden bg-slate-950 border border-slate-800/80 flex items-center justify-center mb-2 relative group-hover:border-slate-700 transition">
+                  <video src="${fullStreamUrl}#t=1" preload="metadata" muted playsinline class="w-full h-full object-cover pointer-events-none"></video>
+                  <div class="absolute inset-0 bg-black/25 flex items-center justify-center group-hover:bg-black/10 transition">
+                    <div class="w-8 h-8 rounded-full bg-brand/90 text-white flex items-center justify-center shadow-md">
+                      <i class="fa-solid fa-play text-[10px] ml-0.5"></i>
+                    </div>
+                  </div>
+                  <div class="absolute bottom-1.5 right-1.5 bg-black/60 backdrop-blur-sm p-1 rounded-md text-[9px] text-indigo-400 leading-none">
+                    <i class="fa-solid fa-video"></i>
+                  </div>
+                </div>`;
+            } else if (isPdf(item.name)) {
+              thumbnailHtml = `
+                <div class="w-full h-28 rounded-xl bg-gradient-to-b from-rose-950/20 to-slate-950 border border-slate-800/80 flex flex-col items-center justify-center mb-2 relative group-hover:border-slate-700 transition">
+                  <i class="fa-solid fa-file-pdf text-3xl text-rose-500 mb-1"></i>
+                  <span class="text-[9px] text-rose-400 font-semibold uppercase tracking-wider">PDF</span>
+                </div>`;
+            } else {
+              thumbnailHtml = `
+                <div class="w-full h-28 rounded-xl bg-slate-950 border border-slate-800/80 flex flex-col items-center justify-center mb-2 relative group-hover:border-slate-700 transition">
+                  <i class="fa-solid ${iconClass} text-2xl mb-1"></i>
+                  <span class="text-[9px] text-slate-500 uppercase font-mono">${item.extension || 'FILE'}</span>
+                </div>`;
+            }
 
             card.innerHTML = `
-              <div class="flex flex-col items-center text-center py-1 flex-1 justify-center min-w-0">
+              <div class="flex flex-col items-center text-center py-0.5 flex-1 justify-center min-w-0">
                 ${thumbnailHtml}
                 <div class="font-medium text-[11px] text-slate-200 line-clamp-2 w-full break-words leading-tight" title="${item.name}">${item.name}</div>
                 <div class="text-[10px] text-slate-400 font-mono mt-1">${item.formattedSize}</div>
