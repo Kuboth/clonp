@@ -408,9 +408,9 @@
 
     function getFileIcon(filename) {
       const ext = filename.split('.').pop().toLowerCase();
-      if (['mp4', 'mkv', 'avi', 'mov', 'webm'].includes(ext)) return 'fa-file-video text-indigo-400';
-      if (['mp3', 'wav', 'flac', 'aac', 'ogg'].includes(ext)) return 'fa-file-audio text-purple-400';
-      if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) return 'fa-file-image text-emerald-400';
+      if (['mp4', 'mkv', 'avi', 'mov', 'webm', 'm4v', '3gp', 'flv', 'wmv', 'ts'].includes(ext)) return 'fa-file-video text-indigo-400';
+      if (['mp3', 'wav', 'flac', 'aac', 'ogg', 'm4a', 'wma', 'opus'].includes(ext)) return 'fa-file-audio text-purple-400';
+      if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'tiff', 'heic', 'avif'].includes(ext)) return 'fa-file-image text-emerald-400';
       if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return 'fa-file-zipper text-amber-400';
       if (['pdf'].includes(ext)) return 'fa-file-pdf text-rose-400';
       if (['srt', 'vtt'].includes(ext)) return 'fa-closed-captioning text-yellow-400';
@@ -419,17 +419,17 @@
 
     function isViewable(filename) {
       const ext = filename.split('.').pop().toLowerCase();
-      return ['mp4', 'mkv', 'webm', 'mov', 'avi', 'mp3', 'wav', 'ogg', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'pdf', 'txt', 'log'].includes(ext);
+      return isImage(filename) || isVideo(filename) || isAudio(filename) || isPdf(filename) || ['txt', 'log', 'json', 'md', 'xml'].includes(ext);
     }
 
     function isImage(filename) {
       const ext = filename.split('.').pop().toLowerCase();
-      return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext);
+      return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'tiff', 'avif', 'heic'].includes(ext);
     }
 
     function isVideo(filename) {
       const ext = filename.split('.').pop().toLowerCase();
-      return ['mp4', 'webm', 'mov'].includes(ext);
+      return ['mp4', 'webm', 'mov', 'm4v', 'mkv', 'avi', '3gp', 'ogv'].includes(ext);
     }
 
     function isPdf(filename) {
@@ -438,7 +438,7 @@
 
     function isAudio(filename) {
       const ext = filename.split('.').pop().toLowerCase();
-      return ['mp3', 'wav', 'ogg'].includes(ext);
+      return ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac', 'opus'].includes(ext);
     }
 
     inspectForm.addEventListener('submit', async (e) => {
@@ -856,7 +856,15 @@
           tracksHtml = `<track kind="captions" label="Português / Legenda" src="/api/subtitles/${subtitleId}" srclang="pt" default>`;
         }
 
-        video.innerHTML = `<source src="${currentStreamUrl}" type="video/mp4">${tracksHtml}`;
+        // Mapeia o tipo MIME correto de acordo com a extensão do vídeo
+        let videoMime = 'video/mp4';
+        if (ext === 'webm') videoMime = 'video/webm';
+        else if (ext === 'mov') videoMime = 'video/quicktime';
+        else if (ext === 'm4v') videoMime = 'video/x-m4v';
+        else if (ext === 'ogv') videoMime = 'video/ogg';
+        else if (ext === 'mkv') videoMime = 'video/x-matroska';
+
+        video.innerHTML = `<source src="${currentStreamUrl}" type="${videoMime}">${tracksHtml}`;
         mediaPlayerWrapper.appendChild(video);
 
         activePlyr = new Plyr('#playerTarget', {
