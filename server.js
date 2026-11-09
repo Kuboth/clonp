@@ -262,7 +262,9 @@ app.get('/api/stream/:id', streamLimiter, async (req, res) => {
       handleRetries: 5            // Tolerância a falhas transitórias de conexão
     } : {
       maxConnections: 4,          // Para streaming
-      initialChunkSize: 131072,
+      initialChunkSize: 65536,    // Início relâmpago de streaming (64KB)
+      chunkSizeIncrement: 131072, // Aumenta o buffer conforme o player consome
+      maxChunkSize: 1048576,
       handleRetries: 5
     };
 

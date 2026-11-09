@@ -329,9 +329,10 @@
 
   </main>
 
-  <!-- Plyr JS, StreamSaver.js & idb-keyval -->
+  <!-- Plyr JS, StreamSaver.js, idb-keyval, Hls.js & Shaka Polyfills -->
   <script src="https://cdn.jsdelivr.net/npm/idb-keyval@6/dist/iife.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/streamsaver@2.0.6/StreamSaver.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
   <script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
 
   <script>
@@ -1300,13 +1301,56 @@
         video.innerHTML = `<source src="${currentStreamUrl}" type="${videoMime}">${tracksHtml}`;
         mediaPlayerWrapper.appendChild(video);
 
+        const preferredSpeed = parseFloat(localStorage.getItem('clonp_preferred_speed') || '1');
+
         activePlyr = new Plyr('#playerTarget', {
           autoplay: true, // Força início imediato
           controls: [
             'play-large', 'play', 'progress', 'current-time', 'duration', 
             'mute', 'volume', 'captions', 'settings', 'pip', 'fullscreen'
           ],
-          speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 2] }
+          seekTime: 10,
+          speed: { selected: preferredSpeed, options: [0.5, 0.75, 1, 1.25, 1.5, 2] }
+        });
+
+        // Lembra velocidade preferida do usuário
+        activePlyr.on('ratechange', () => {
+          if (activePlyr.speed) {
+            localStorage.setItem('clonp_preferred_speed', activePlyr.speed);
+          }
+        });
+
+        // Suporte a HLS / Streaming Adaptativo (hls.js)
+        if (ext === 'm3u8' && Hls.isSupported()) {
+          const hls = new Hls({ maxBufferLength: 30 });
+          hls.loadSource(currentStreamUrl);
+          hls.attachMedia(video);
+        }
+
+        // Duplo Toque Mobile para Avançar/Retroceder 10s (Estilo YouTube/Netflix)
+        let lastTapTime = 0;
+        let lastTapSide = '';
+        video.parentElement.addEventListener('touchend', (e) => {
+          const currentTime = new Date().getTime();
+          const tapInterval = currentTime - lastTapTime;
+          const touch = e.changedTouches[0];
+          if (!touch) return;
+          const rect = video.getBoundingClientRect();
+          const tapX = touch.clientX - rect.left;
+          const side = tapX > (rect.width / 2) ? 'right' : 'left';
+
+          if (tapInterval < 320 && tapInterval > 0 && side === lastTapSide) {
+            e.preventDefault();
+            if (side === 'right') {
+              activePlyr.forward(10);
+              showToast('+10s ⏩');
+            } else {
+              activePlyr.rewind(10);
+              showToast('⏪ -10s');
+            }
+          }
+          lastTapTime = currentTime;
+          lastTapSide = side;
         });
 
         // Disparo imediato de reprodução assim que tiver dados prontos
