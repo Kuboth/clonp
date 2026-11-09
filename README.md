@@ -40,7 +40,8 @@ O **Clonp** permite inspecionar pastas ou arquivos compartilhados do MEGA, naveg
 
 1. Clone o repositório ou navegue até a pasta do projeto:
    ```bash
-   cd clonr
+   git clone https://github.com/Kuboth/clonp.git
+   cd clonp
    ```
 
 2. Instale as dependências:
