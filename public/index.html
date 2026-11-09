@@ -985,7 +985,10 @@
     }, { rootMargin: '300px' });
 
     function applyVideoThumb(container, dataUrl, isVertical = false) {
-      const badgeHtml = isVertical 
+      const isMiniList = container.classList.contains('w-8');
+      const badgeHtml = isMiniList
+        ? ''
+        : isVertical 
         ? `<div class="absolute bottom-1 right-1 bg-black/75 backdrop-blur-sm px-1 py-0.5 rounded text-[8px] text-zinc-300 font-mono leading-none border border-zinc-700/60 flex items-center space-x-0.5">
              <i class="fa-solid fa-mobile-screen-button text-[7px] text-zinc-400"></i>
              <span>9:16</span>
@@ -1333,10 +1336,14 @@
           };
 
           const previewIconOrThumb = isImg 
-            ? `<div class="w-7 h-7 rounded-md overflow-hidden bg-zinc-950 border border-zinc-800 flex-shrink-0">
+            ? `<div class="w-8 h-8 rounded-md overflow-hidden bg-zinc-950 border border-zinc-800 flex-shrink-0">
                  <img data-img-stream="${fullStreamUrl}" data-file-id="${item.id}" alt="${item.name}" loading="lazy" decoding="async" class="cached-img-target w-full h-full object-cover">
                </div>`
-            : `<div class="w-7 h-7 rounded-md bg-zinc-900 border border-zinc-800 flex items-center justify-center flex-shrink-0">
+            : isVid
+            ? `<div class="video-thumb-container w-8 h-8 rounded-md overflow-hidden bg-zinc-950 border border-zinc-800 flex items-center justify-center flex-shrink-0 relative" data-video-id="${item.id}">
+                 <i class="fa-solid fa-play text-[10px] text-zinc-500"></i>
+               </div>`
+            : `<div class="w-8 h-8 rounded-md bg-zinc-900 border border-zinc-800 flex items-center justify-center flex-shrink-0">
                  <i class="fa-solid ${iconClass} text-xs"></i>
                </div>`;
 
