@@ -1,6 +1,6 @@
 /**
  * @file server.js
- * @description Servidor clonp - Debrid, Streaming e Downloader para MEGA.nz
+ * @description Servidor clonp - Debrid, Streaming e Downloader com SmartProxy (estilo MegaBasterd) para MEGA.nz
  */
 
 const express = require('express');
@@ -119,67 +119,180 @@ setInterval(() => {
   }
 }, 15 * 60 * 1000);
 
-// Gerenciador de Proxies
-let freeProxies = [];
+// ============================================================================
+// SISTEMA SMARTPROXY (Inspirado no MegaBasterd)
+// ============================================================================
+let proxyPool = [];
 let lastProxyFetch = 0;
-let proxyIndex = 0;
-const PROXY_ENABLED = process.env.ENABLE_MEGA_PROXY === 'true';
+let proxyPointer = 0;
+/** @type {Map<string, number>} Proxies em cooldown (temporariamente bloqueados por cota) */
+const cooldownProxies = new Map();
+
+// Ativo por padrão se houver proxies, ou forçado via env SMART_PROXY_ENABLED !== 'false'
+const SMART_PROXY_ENABLED = process.env.SMART_PROXY_ENABLED !== 'false';
 
 /**
- * Atualiza e mantém o pool de proxies HTTP/HTTPS
- * @returns {Promise<string[]>} Lista de proxies
+ * Carrega e normaliza listas de proxies (HTTP/HTTPS) de fontes públicas e de ambiente
  */
-async function updateFreeProxies() {
+async function refreshProxyPool() {
   const now = Date.now();
-  if (now - lastProxyFetch < 30 * 60 * 1000 && freeProxies.length > 0) {
-    return freeProxies;
+  if (now - lastProxyFetch < 30 * 60 * 1000 && proxyPool.length > 0) {
+    return proxyPool;
   }
+
+  const collected = [];
+
+  // 1. Proxies customizados adicionados via variável de ambiente (ex: CUSTOM_PROXIES="ip:port,ip2:port2")
+  if (process.env.CUSTOM_PROXIES) {
+    const customList = process.env.CUSTOM_PROXIES.split(/[,;\n]/).map(p => p.trim()).filter(Boolean);
+    collected.push(...customList);
+  }
+
+  // 2. Pool público externo
   try {
     const res = await axios.get(
       'https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/http.txt',
-      { timeout: 5000 }
+      { timeout: 6000 }
     );
     if (res.data) {
-      freeProxies = res.data.split('\n').map(p => p.trim()).filter(Boolean);
-      lastProxyFetch = now;
-      console.log(`[Proxy Pool] Carregados ${freeProxies.length} proxies.`);
+      const publicList = res.data.split('\n').map(p => p.trim()).filter(Boolean);
+      collected.push(...publicList);
     }
   } catch (err) {
-    console.warn('[Proxy Pool] Falha ao carregar proxies externos:', err.message);
+    console.warn('[SmartProxy] Aviso ao coletar proxies públicos:', err.message);
   }
-  return freeProxies;
+
+  proxyPool = Array.from(new Set(collected));
+  lastProxyFetch = now;
+  console.log(`[SmartProxy] Pool atualizado com ${proxyPool.length} proxies.`);
+  return proxyPool;
 }
 
-updateFreeProxies();
+refreshProxyPool();
 
 /**
- * Retorna o próximo agente proxy rotacionado se configurado, ou null para conexão direta
+ * Retorna o próximo proxy disponível que não esteja em período de cooldown (cota estourada)
+ * @returns {string | null}
+ */
+function getNextAvailableProxy() {
+  if (!SMART_PROXY_ENABLED || proxyPool.length === 0) return null;
+
+  const now = Date.now();
+  const total = proxyPool.length;
+
+  for (let i = 0; i < total; i++) {
+    const candidate = proxyPool[(proxyPointer + i) % total];
+    const cooldownUntil = cooldownProxies.get(candidate);
+    if (!cooldownUntil || now > cooldownUntil) {
+      proxyPointer = (proxyPointer + i + 1) % total;
+      return candidate;
+    }
+  }
+
+  // Se todos estiverem em cooldown, usa o ponteiro normal
+  const fallback = proxyPool[proxyPointer % total];
+  proxyPointer++;
+  return fallback;
+}
+
+/**
+ * Cria ou atualiza uma instância HttpsProxyAgent para um proxy
+ * @param {string | null} proxyStr 
  * @returns {HttpsProxyAgent<string> | null}
  */
-function getNextProxyAgent() {
-  if (!PROXY_ENABLED || freeProxies.length === 0) {
-    return null;
-  }
-  const proxy = freeProxies[proxyIndex % freeProxies.length];
-  proxyIndex++;
+function createAgent(proxyStr) {
+  if (!proxyStr) return null;
   try {
-    return new HttpsProxyAgent(`http://${proxy}`);
+    const url = proxyStr.startsWith('http') ? proxyStr : `http://${proxyStr}`;
+    return new HttpsProxyAgent(url);
   } catch (err) {
     return null;
   }
 }
 
 /**
- * Cria uma instância File da biblioteca megajs aplicando proxy se disponível
+ * Marca um proxy em cooldown após erro 509 / rate limit do MEGA (estilo MegaBasterd)
+ * @param {string} proxyStr 
+ * @param {number} [cooldownSeconds=1800] 30 minutos padrão
+ */
+function markProxyCooldown(proxyStr, cooldownSeconds = 1800) {
+  if (!proxyStr) return;
+  const until = Date.now() + cooldownSeconds * 1000;
+  cooldownProxies.set(proxyStr, until);
+  console.log(`[SmartProxy] Proxy ${proxyStr} entrou em cooldown por ${cooldownSeconds}s (limite de cota atingido).`);
+}
+
+/**
+ * Anexa o motor SmartProxy ao objeto File do megajs com interceptor inteligente de retentativas
+ * @param {any} megaFile 
+ */
+function attachSmartProxy(megaFile) {
+  if (!megaFile || !megaFile.api) return megaFile;
+
+  let currentProxy = getNextAvailableProxy();
+  if (currentProxy) {
+    const agent = createAgent(currentProxy);
+    if (agent) {
+      megaFile.api.httpAgent = agent;
+      megaFile.api.httpsAgent = agent;
+    }
+  }
+
+  // Intercepta e aprimora as retentativas no estilo SmartProxy (Turbo Mode)
+  megaFile.smartRetryHandler = (tries, error, cb) => {
+    const errMsg = (error && error.message) ? error.message : String(error);
+    const isBandwidthLimit = errMsg.includes('509') || errMsg.includes('Bandwidth limit') || errMsg.includes('rate limit');
+
+    if (isBandwidthLimit || tries > 2) {
+      if (currentProxy) {
+        markProxyCooldown(currentProxy, isBandwidthLimit ? 3600 : 600);
+      }
+      // Rotaciona dinamicamente para um novo proxy limpo
+      const nextProxy = getNextAvailableProxy();
+      if (nextProxy && nextProxy !== currentProxy) {
+        currentProxy = nextProxy;
+        const newAgent = createAgent(currentProxy);
+        if (newAgent) {
+          megaFile.api.httpAgent = newAgent;
+          megaFile.api.httpsAgent = newAgent;
+          console.log(`[SmartProxy] Rotacionado dinamicamente para: ${currentProxy} (Tentativa ${tries})`);
+        }
+      }
+    }
+
+    if (tries > 12) {
+      return cb(error);
+    }
+    // Retentativa imediata com novo proxy (ou backoff suave se for o mesmo)
+    setTimeout(cb, isBandwidthLimit ? 1000 : Math.min(1000 * Math.pow(1.5, tries), 10000));
+  };
+
+  return megaFile;
+}
+
+/**
+ * Cria uma instância File da biblioteca megajs pronta com SmartProxy
  * @param {string} url URL pública do MEGA
  * @returns {any}
  */
 function createMegaFileInstance(url) {
-  const agent = getNextProxyAgent();
-  if (agent) {
-    return File.fromURL(url, { httpAgent: agent, httpsAgent: agent });
-  }
-  return File.fromURL(url);
+  const file = File.fromURL(url);
+  return attachSmartProxy(file);
+}
+
+/**
+ * Executa download do megajs usando o handler SmartProxy
+ * @param {any} file 
+ * @param {object} [options]
+ * @param {Function} [cb]
+ */
+function downloadWithSmartProxy(file, options = {}, cb) {
+  attachSmartProxy(file);
+  const opts = {
+    ...options,
+    handleRetries: file.smartRetryHandler || File.defaultHandleRetries
+  };
+  return file.download(opts, cb);
 }
 
 /**
@@ -226,6 +339,7 @@ app.post('/api/inspect', inspectLimiter, async (req, res) => {
 
       const buildTree = (node, currentPath = '') => {
         const nodeId = `${node.downloadId || node.nodeId || Math.random().toString(36).substring(7)}`;
+        attachSmartProxy(node);
         fileInstancesCache.set(nodeId, { instance: node, cachedAt: now });
 
         const timestamp = node.timestamp ? node.timestamp * 1000 : (node.mtime ? new Date(node.mtime).getTime() : Date.now());
@@ -324,7 +438,7 @@ app.post('/api/inspect', inspectLimiter, async (req, res) => {
   }
 });
 
-// 2. Rota de streaming e download individual (Protegida por Rate Limit)
+// 2. Rota de streaming e download individual com SmartProxy
 app.get('/api/stream/:id', streamLimiter, async (req, res) => {
   const { id } = req.params;
   const isDownload = req.query.download === '1';
@@ -346,7 +460,7 @@ app.get('/api/stream/:id', streamLimiter, async (req, res) => {
     const headers = {
       'Content-Type': mimeType,
       'Accept-Ranges': 'bytes',
-      'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800' // Cache de 24h no navegador para miniaturas instantâneas
+      'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800'
     };
 
     if (isDownload) {
@@ -369,7 +483,7 @@ app.get('/api/stream/:id', streamLimiter, async (req, res) => {
 
       // Para requisições pequenas (frames de vídeo, miniaturas, headers), entrega com callback confiável
       if (chunkSize <= 2 * 1024 * 1024) {
-        return file.download({ start, end }, (err, buf) => {
+        return downloadWithSmartProxy(file, { start, end }, (err, buf) => {
           if (err) {
             console.error('Buffer error (range):', err);
             if (!res.headersSent) res.status(500).json({ error: 'Erro no buffer range: ' + (err.message || err) });
@@ -381,7 +495,7 @@ app.get('/api/stream/:id', streamLimiter, async (req, res) => {
       }
 
       res.writeHead(206, headers);
-      const downloadStream = file.download({ start, end });
+      const downloadStream = downloadWithSmartProxy(file, { start, end });
       downloadStream.on('error', (err) => {
         console.error('Stream error:', err);
         if (!res.headersSent) res.status(500).json({ error: 'Stream error: ' + (err.message || err) });
@@ -393,9 +507,9 @@ app.get('/api/stream/:id', streamLimiter, async (req, res) => {
       headers['Content-Length'] = fileSize;
     }
 
-    // Para imagens e arquivos pequenos (< 8MB), entrega tudo em 1 único bloco com callback sem travar em proxies/Cloudflare
+    // Para arquivos pequenos (< 8MB), entrega tudo em 1 único bloco com SmartProxy
     if (fileSize && fileSize <= 8 * 1024 * 1024 && !isDownload) {
-      return file.download({}, (err, buf) => {
+      return downloadWithSmartProxy(file, {}, (err, buf) => {
         if (err) {
           console.error('Buffer download error:', err);
           if (!res.headersSent) res.status(500).json({ error: 'Erro no buffer download: ' + (err.message || err) });
@@ -407,7 +521,7 @@ app.get('/api/stream/:id', streamLimiter, async (req, res) => {
     }
 
     res.writeHead(200, headers);
-    const downloadStream = file.download();
+    const downloadStream = downloadWithSmartProxy(file);
     downloadStream.on('error', (err) => {
       console.error('Stream error:', err);
       if (!res.headersSent) res.status(500).json({ error: 'Stream full error: ' + (err.message || err) });
@@ -432,7 +546,7 @@ app.get('/api/subtitles/:id', streamLimiter, (req, res) => {
   }
 
   res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
-  const stream = cached.instance.download();
+  const stream = downloadWithSmartProxy(cached.instance);
 
   if (cached.instance.name.endsWith('.srt')) {
     stream.pipe(srt2vtt()).pipe(res);
@@ -469,7 +583,7 @@ app.get('/api/download-folder/:folderKey', streamLimiter, async (req, res) => {
       if (!item.isDirectory) {
         const cached = fileInstancesCache.get(item.id);
         if (cached && cached.instance) {
-          const fileStream = cached.instance.download();
+          const fileStream = downloadWithSmartProxy(cached.instance);
           archive.append(fileStream, { name: item.path });
         }
       }
@@ -520,7 +634,7 @@ app.get('/api/download-batch/:token', streamLimiter, async (req, res) => {
     for (const id of batchData.ids) {
       const cached = fileInstancesCache.get(id);
       if (cached && cached.instance) {
-        const fileStream = cached.instance.download();
+        const fileStream = downloadWithSmartProxy(cached.instance);
         archive.append(fileStream, { name: cached.instance.name || 'arquivo' });
       }
     }
@@ -551,7 +665,7 @@ app.post('/api/download-batch', streamLimiter, async (req, res) => {
     for (const id of ids) {
       const cached = fileInstancesCache.get(id);
       if (cached && cached.instance) {
-        const fileStream = cached.instance.download();
+        const fileStream = downloadWithSmartProxy(cached.instance);
         archive.append(fileStream, { name: cached.instance.name || 'arquivo' });
       }
     }
@@ -575,11 +689,19 @@ if (process.env.RENDER_EXTERNAL_URL) {
   console.log(`[Keep-Alive] Auto-ping ativo para: ${keepAliveUrl}`);
 }
 
-// 8. Status do Pool de Proxies
+// 8. Status do SmartProxy e Cooldown
 app.get('/api/proxy-status', async (req, res) => {
+  const now = Date.now();
+  let cooldownCount = 0;
+  for (const exp of cooldownProxies.values()) {
+    if (now < exp) cooldownCount++;
+  }
+
   res.json({
-    proxyEnabled: PROXY_ENABLED,
-    activeProxiesCount: freeProxies.length,
+    smartProxyEnabled: SMART_PROXY_ENABLED,
+    totalProxies: proxyPool.length,
+    activeAvailable: Math.max(0, proxyPool.length - cooldownCount),
+    inCooldownCount: cooldownCount,
     lastUpdate: new Date(lastProxyFetch).toLocaleTimeString()
   });
 });
@@ -588,6 +710,6 @@ app.listen(PORT, () => {
   console.log(`===============================================`);
   console.log(` Clonp rodando com sucesso e protegido!`);
   console.log(` Porta: ${PORT}`);
-  console.log(` Proxy Ativo: ${PROXY_ENABLED}`);
+  console.log(` SmartProxy Ativo: ${SMART_PROXY_ENABLED}`);
   console.log(`===============================================`);
 });
