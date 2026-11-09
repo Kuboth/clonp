@@ -348,7 +348,52 @@ app.get('/api/download-folder/:folderKey', streamLimiter, async (req, res) => {
   }
 });
 
-// 5. Status do Pool de Proxies
+// 4. Rota de download em lote (arquivos selecionados via zip)
+app.post('/api/download-batch', streamLimiter, async (req, res) => {
+  const { ids, zipName } = req.body;
+  if (!ids || !Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: 'Nenhum arquivo selecionado.' });
+  }
+
+  const archive = archiver('zip', { zlib: { level: 0 } });
+  const finalName = `${sanitizeFilename(zipName || 'clonp_selecao')}.zip`;
+  res.attachment(finalName);
+
+  archive.pipe(res);
+  archive.on('error', (err) => {
+    console.error('Erro no batch zip:', err);
+    if (!res.headersSent) res.status(500).end();
+  });
+
+  try {
+    for (const id of ids) {
+      const cached = fileInstancesCache.get(id);
+      if (cached && cached.instance) {
+        const fileStream = cached.instance.download();
+        archive.append(fileStream, { name: cached.instance.name || 'arquivo' });
+      }
+    }
+    await archive.finalize();
+  } catch (err) {
+    console.error('Erro ao empacotar seleção:', err);
+  }
+});
+
+// 5. Rota de Keep-Alive / Health Check
+app.get('/api/health', (req, res) => {
+  res.send('OK');
+});
+
+// Auto-ping interno para manter acordado se URL configurada (ou Render)
+if (process.env.RENDER_EXTERNAL_URL) {
+  const keepAliveUrl = `${process.env.RENDER_EXTERNAL_URL}/api/health`;
+  setInterval(() => {
+    axios.get(keepAliveUrl).catch(() => {});
+  }, 10 * 60 * 1000); // A cada 10 minutos
+  console.log(`[Keep-Alive] Auto-ping ativo para: ${keepAliveUrl}`);
+}
+
+// 6. Status do Pool de Proxies
 app.get('/api/proxy-status', async (req, res) => {
   res.json({
     activeProxiesCount: freeProxies.length,

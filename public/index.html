@@ -6,7 +6,9 @@
   <meta name="theme-color" content="#0b1120" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>Clonp - Mobile</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+  <title>Clonp</title>
   
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -33,7 +35,6 @@
     :root {
       --plyr-color-main: #ef4444;
     }
-    /* Suporte a touch e safe area no iPhone */
     body {
       padding-bottom: env(safe-area-inset-bottom);
       -webkit-tap-highlight-color: transparent;
@@ -46,7 +47,6 @@
       border-radius: 0.75rem;
       overflow: hidden;
     }
-    /* Estilização suave da barra de rolagem */
     ::-webkit-scrollbar {
       width: 4px;
       height: 4px;
@@ -57,7 +57,7 @@
     }
   </style>
 </head>
-<body class="bg-darkbg text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-brand selection:text-white pb-6">
+<body class="bg-darkbg text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-brand selection:text-white pb-6 select-none">
 
   <!-- Header Mobile Otimizado -->
   <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-50 px-4 py-3">
@@ -70,9 +70,18 @@
           <span class="font-extrabold text-lg tracking-tight text-white">Clon<span class="text-brand">p</span></span>
         </div>
       </div>
-      <div class="flex items-center space-x-1.5 bg-slate-800 px-2.5 py-1 rounded-full border border-slate-700/60 text-[11px] text-slate-300">
-        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-        <span>Online</span>
+      
+      <div class="flex items-center space-x-2">
+        <!-- Botão Instalar PWA se disponível -->
+        <button id="pwaInstallBtn" class="hidden px-2.5 py-1 bg-brand/20 text-brand border border-brand/30 rounded-full text-xs font-semibold flex items-center space-x-1">
+          <i class="fa-solid fa-download text-[10px]"></i>
+          <span>Instalar App</span>
+        </button>
+
+        <div class="flex items-center space-x-1.5 bg-slate-800 px-2.5 py-1 rounded-full border border-slate-700/60 text-[11px] text-slate-300">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>Online</span>
+        </div>
       </div>
     </div>
   </header>
@@ -82,10 +91,28 @@
 
     <!-- Card de Inserção de Link -->
     <div class="bg-darkcard border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-lg relative overflow-hidden">
-      <h1 class="text-lg sm:text-xl font-bold mb-3 flex items-center space-x-2">
-        <i class="fa-solid fa-cloud-arrow-down text-brand"></i>
-        <span>Colar link MEGA</span>
+      <h1 class="text-lg sm:text-xl font-bold mb-3 flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+          <i class="fa-solid fa-cloud-arrow-down text-brand"></i>
+          <span>Colar link MEGA</span>
+        </div>
+        <!-- Botão Abrir Histórico -->
+        <button id="toggleHistoryBtn" class="text-xs text-slate-400 hover:text-white flex items-center space-x-1 py-1 px-2 rounded-lg bg-slate-900 border border-slate-800">
+          <i class="fa-solid fa-clock-rotate-left text-[11px] text-brand"></i>
+          <span>Recentes</span>
+        </button>
       </h1>
+
+      <!-- Drawer de Links Recentes -->
+      <div id="recentLinksContainer" class="hidden mb-3 p-3 bg-slate-950/80 rounded-xl border border-slate-800 space-y-1.5">
+        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center justify-between">
+          <span>Últimos links visitados</span>
+          <button onclick="clearHistory()" class="text-rose-400 hover:text-rose-300 text-[10px]">Limpar</button>
+        </div>
+        <div id="recentLinksList" class="space-y-1 text-xs">
+          <!-- Injetado via JS -->
+        </div>
+      </div>
 
       <form id="inspectForm" class="flex flex-col gap-2.5">
         <div class="relative">
@@ -134,57 +161,68 @@
         </nav>
       </div>
 
-      <!-- Barra de Ferramentas Mobile: Ordenação, Alternador de Visualização e Direção -->
+      <!-- Barra de Ferramentas Mobile: Ordenação, Alternador de Visualização e Modo Seleção em Lote -->
       <div class="flex items-center justify-between gap-2">
-        <!-- Lado Esquerdo: Menu Ordenar por -->
-        <div class="relative">
-          <button 
-            id="sortMenuBtn"
-            class="px-3 py-2 bg-slate-800 hover:bg-slate-750 border border-slate-700 rounded-xl text-xs font-medium text-slate-200 transition inline-flex items-center space-x-1.5 cursor-pointer touch-target shadow-sm">
-            <i class="fa-solid fa-arrow-down-short-wide text-brand"></i>
-            <span id="currentSortLabel">Nome</span>
-            <i class="fa-solid fa-chevron-down text-[10px] text-slate-400 ml-1"></i>
-          </button>
+        <!-- Lado Esquerdo: Menu Ordenar por + Botão Seleção -->
+        <div class="flex items-center gap-1.5">
+          <div class="relative">
+            <button 
+              id="sortMenuBtn"
+              class="px-3 py-2 bg-slate-800 hover:bg-slate-750 border border-slate-700 rounded-xl text-xs font-medium text-slate-200 transition inline-flex items-center space-x-1.5 cursor-pointer touch-target shadow-sm">
+              <i class="fa-solid fa-arrow-down-short-wide text-brand"></i>
+              <span id="currentSortLabel">Nome</span>
+              <i class="fa-solid fa-chevron-down text-[10px] text-slate-400 ml-1"></i>
+            </button>
 
-          <!-- Dropdown Ordenar por -->
-          <div 
-            id="sortDropdown" 
-            class="hidden absolute left-0 mt-2 w-52 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl z-40 py-2 divide-y divide-slate-800/80 font-sans">
-            
-            <div class="px-3.5 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-              Ordenar por
-            </div>
+            <!-- Dropdown Ordenar por -->
+            <div 
+              id="sortDropdown" 
+              class="hidden absolute left-0 mt-2 w-52 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl z-40 py-2 divide-y divide-slate-800/80 font-sans">
+              
+              <div class="px-3.5 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                Ordenar por
+              </div>
 
-            <div class="py-1 text-xs text-slate-200">
-              <button onclick="changeSort('name')" class="w-full px-3.5 py-2.5 text-left hover:bg-slate-800 flex items-center justify-between transition cursor-pointer">
-                <span>Nome</span>
-                <i id="check_name" class="fa-solid fa-check text-brand text-xs"></i>
-              </button>
-              <button onclick="changeSort('date_desc')" class="w-full px-3.5 py-2.5 text-left hover:bg-slate-800 flex items-center justify-between transition cursor-pointer">
-                <span>Data de inclusão</span>
-                <i id="check_date_desc" class="fa-solid fa-check text-brand text-xs hidden"></i>
-              </button>
-              <button onclick="changeSort('date_asc')" class="w-full px-3.5 py-2.5 text-left hover:bg-slate-800 flex items-center justify-between transition cursor-pointer">
-                <span>Última alteração</span>
-                <i id="check_date_asc" class="fa-solid fa-check text-brand text-xs hidden"></i>
-              </button>
-              <button onclick="changeSort('type')" class="w-full px-3.5 py-2.5 text-left hover:bg-slate-800 flex items-center justify-between transition cursor-pointer">
-                <span>Tipo</span>
-                <i id="check_type" class="fa-solid fa-check text-brand text-xs hidden"></i>
-              </button>
-              <button onclick="changeSort('size')" class="w-full px-3.5 py-2.5 text-left hover:bg-slate-800 flex items-center justify-between transition cursor-pointer">
-                <span>Tamanho</span>
-                <i id="check_size" class="fa-solid fa-check text-brand text-xs hidden"></i>
-              </button>
-              <button onclick="changeSort('duration')" class="w-full px-3.5 py-2.5 text-left hover:bg-slate-800 flex items-center justify-between transition cursor-pointer">
-                <span>Duração / Extensão</span>
-                <i id="check_duration" class="fa-solid fa-check text-brand text-xs hidden"></i>
-              </button>
+              <div class="py-1 text-xs text-slate-200">
+                <button onclick="changeSort('name')" class="w-full px-3.5 py-2.5 text-left hover:bg-slate-800 flex items-center justify-between transition cursor-pointer">
+                  <span>Nome</span>
+                  <i id="check_name" class="fa-solid fa-check text-brand text-xs"></i>
+                </button>
+                <button onclick="changeSort('date_desc')" class="w-full px-3.5 py-2.5 text-left hover:bg-slate-800 flex items-center justify-between transition cursor-pointer">
+                  <span>Data de inclusão</span>
+                  <i id="check_date_desc" class="fa-solid fa-check text-brand text-xs hidden"></i>
+                </button>
+                <button onclick="changeSort('date_asc')" class="w-full px-3.5 py-2.5 text-left hover:bg-slate-800 flex items-center justify-between transition cursor-pointer">
+                  <span>Última alteração</span>
+                  <i id="check_date_asc" class="fa-solid fa-check text-brand text-xs hidden"></i>
+                </button>
+                <button onclick="changeSort('type')" class="w-full px-3.5 py-2.5 text-left hover:bg-slate-800 flex items-center justify-between transition cursor-pointer">
+                  <span>Tipo</span>
+                  <i id="check_type" class="fa-solid fa-check text-brand text-xs hidden"></i>
+                </button>
+                <button onclick="changeSort('size')" class="w-full px-3.5 py-2.5 text-left hover:bg-slate-800 flex items-center justify-between transition cursor-pointer">
+                  <span>Tamanho</span>
+                  <i id="check_size" class="fa-solid fa-check text-brand text-xs hidden"></i>
+                </button>
+                <button onclick="changeSort('duration')" class="w-full px-3.5 py-2.5 text-left hover:bg-slate-800 flex items-center justify-between transition cursor-pointer">
+                  <span>Duração / Extensão</span>
+                  <i id="check_duration" class="fa-solid fa-check text-brand text-xs hidden"></i>
+                </button>
+              </div>
             </div>
           </div>
+
+          <!-- Botão Ativar Seleção em Lote -->
+          <button 
+            id="toggleSelectModeBtn"
+            onclick="toggleSelectMode()"
+            class="px-2.5 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-300 hover:text-white transition touch-target flex items-center space-x-1">
+            <i class="fa-solid fa-list-check text-xs text-brand"></i>
+            <span class="hidden sm:inline">Selecionar</span>
+          </button>
         </div>
 
-        <!-- Lado Direito: Alternador de Visualização (Lista vs Grade) + Botão Direção (Crescente/Decrescente) -->
+        <!-- Lado Direito: Alternador Lista/Grade + Botão Direção -->
         <div class="flex items-center gap-1.5">
           <!-- Alternador de Visualização (Lista vs Grade) -->
           <div class="flex items-center bg-slate-900 border border-slate-800 rounded-xl p-0.5">
@@ -215,14 +253,29 @@
         </div>
       </div>
 
-      <!-- Lista Mobile Card-Based de Arquivos -->
+      <!-- Barra Flutuante de Ação em Lote (Quando itens estão selecionados) -->
+      <div id="batchActionToolbar" class="hidden bg-brand/10 border border-brand/30 rounded-2xl p-2.5 flex items-center justify-between text-xs animate-fade-in">
+        <div class="flex items-center space-x-2 pl-1">
+          <span class="w-2 h-2 rounded-full bg-brand"></span>
+          <span id="selectedCountText" class="font-bold text-slate-200">0 selecionados</span>
+        </div>
+        <div class="flex items-center space-x-1.5">
+          <button onclick="selectAllCurrentFolder()" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-lg">Todos</button>
+          <button onclick="downloadSelectedBatch()" class="px-3 py-1.5 bg-brand hover:bg-rose-600 text-white font-semibold rounded-lg shadow flex items-center space-x-1">
+            <i class="fa-solid fa-file-zipper text-xs"></i>
+            <span>Baixar (.ZIP)</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Lista / Grade de Arquivos -->
       <div id="fileListContainer" class="space-y-2">
         <!-- Itens injetados via JS -->
       </div>
 
     </div>
 
-    <!-- Modal de Player de Mídia Avançado (Tela Cheia Nativa no Mobile e Desktop) -->
+    <!-- Modal de Visualizador Tela Cheia (Swipe Gallery & Resumo de Vídeo) -->
     <div id="mediaModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-0 bg-black/95 backdrop-blur-md">
       <div class="bg-black/90 sm:border border-slate-800 rounded-none sm:rounded-2xl max-w-5xl w-full h-full sm:h-auto sm:max-h-[92vh] p-2 sm:p-4 relative shadow-2xl flex flex-col justify-between">
         
@@ -238,13 +291,23 @@
         </div>
         
         <!-- Área Central de Exibição Expandida -->
-        <div id="mediaPlayerWrapper" class="w-full flex-1 bg-black flex items-center justify-center overflow-hidden my-auto min-h-[320px]">
+        <div id="mediaPlayerWrapper" class="w-full flex-1 bg-black flex items-center justify-center overflow-hidden my-auto min-h-[320px] relative">
           <!-- Player ou Imagem injetada via JS -->
         </div>
 
+        <!-- Controles de Galeria (Anterior / Próximo) e Download -->
         <div class="flex items-center justify-between px-2 pt-2 text-xs border-t border-slate-800/80">
-          <span class="text-slate-400 text-[11px] truncate" id="modalSubInfo">Stream Contínuo</span>
-          <a id="modalDownloadBtn" href="#" download class="text-slate-300 hover:text-white flex items-center space-x-1.5 py-1 px-3 rounded-lg bg-slate-800 active:bg-slate-700 text-xs">
+          <div class="flex items-center space-x-1">
+            <button onclick="navigateGallery(-1)" class="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white" title="Item Anterior">
+              <i class="fa-solid fa-chevron-left"></i>
+            </button>
+            <span id="galleryCounter" class="text-[11px] text-slate-400 px-2 font-mono">1 / 1</span>
+            <button onclick="navigateGallery(1)" class="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white" title="Próximo Item">
+              <i class="fa-solid fa-chevron-right"></i>
+            </button>
+          </div>
+
+          <a id="modalDownloadBtn" href="#" download class="text-slate-300 hover:text-white flex items-center space-x-1.5 py-1.5 px-3 rounded-lg bg-slate-800 active:bg-slate-700 text-xs">
             <i class="fa-solid fa-download text-[11px]"></i>
             <span>Baixar arquivo</span>
           </a>
@@ -255,7 +318,7 @@
     <!-- Toast de Notificação -->
     <div id="toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-4 py-2.5 rounded-full shadow-2xl text-xs flex items-center space-x-2 z-50 whitespace-nowrap">
       <i class="fa-solid fa-check"></i>
-      <span id="toastMsg">Link copiado!</span>
+      <span id="toastMsg">Notificação</span>
     </div>
 
   </main>
@@ -264,6 +327,30 @@
   <script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
 
   <script>
+    // Registro do Service Worker (PWA)
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+
+    let deferredPrompt = null;
+    const pwaInstallBtn = document.getElementById('pwaInstallBtn');
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      pwaInstallBtn.classList.remove('hidden');
+    });
+
+    pwaInstallBtn.addEventListener('click', async () => {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+          pwaInstallBtn.classList.add('hidden');
+        }
+        deferredPrompt = null;
+      }
+    });
+
     const inspectForm = document.getElementById('inspectForm');
     const urlInput = document.getElementById('urlInput');
     const btnInspect = document.getElementById('btnInspect');
@@ -273,19 +360,16 @@
     const errorMessage = document.getElementById('errorMessage');
     const fileListContainer = document.getElementById('fileListContainer');
     const breadcrumbs = document.getElementById('breadcrumbs');
-    const btnDownloadAll = document.getElementById('btnDownloadAll');
 
-    // Elementos de Ordenação
     const sortMenuBtn = document.getElementById('sortMenuBtn');
     const sortDropdown = document.getElementById('sortDropdown');
     const currentSortLabel = document.getElementById('currentSortLabel');
-    const directionLabel = document.getElementById('directionLabel');
-    const directionIcon = document.getElementById('directionIcon');
 
     const mediaModal = document.getElementById('mediaModal');
     const modalTitle = document.getElementById('modalTitle');
     const mediaPlayerWrapper = document.getElementById('mediaPlayerWrapper');
     const closeModalBtn = document.getElementById('closeModalBtn');
+    const galleryCounter = document.getElementById('galleryCounter');
 
     let rootNode = null;
     let currentFolderNode = null;
@@ -295,7 +379,62 @@
 
     let currentSortBy = 'name';
     let isAscending = true;
-    let currentViewMode = localStorage.getItem('clonp_view_mode') || 'list'; // 'list' ou 'grid'
+    let currentViewMode = localStorage.getItem('clonp_view_mode') || 'list';
+
+    // Gerenciador de Seleção em Lote
+    let isSelectionMode = false;
+    const selectedItemIds = new Set();
+
+    // Galeria Swipe
+    let viewableItemsList = [];
+    let currentGalleryIndex = 0;
+
+    // Histórico de Links Recentes
+    const toggleHistoryBtn = document.getElementById('toggleHistoryBtn');
+    const recentLinksContainer = document.getElementById('recentLinksContainer');
+    const recentLinksList = document.getElementById('recentLinksList');
+
+    toggleHistoryBtn.addEventListener('click', () => {
+      recentLinksContainer.classList.toggle('hidden');
+      renderRecentLinks();
+    });
+
+    function saveRecentLink(url, title) {
+      let recent = JSON.parse(localStorage.getItem('clonp_recent_links') || '[]');
+      recent = recent.filter(r => r.url !== url);
+      recent.unshift({ url, title: title || url, date: Date.now() });
+      if (recent.length > 6) recent.pop();
+      localStorage.setItem('clonp_recent_links', JSON.stringify(recent));
+      renderRecentLinks();
+    }
+
+    function renderRecentLinks() {
+      const recent = JSON.parse(localStorage.getItem('clonp_recent_links') || '[]');
+      if (!recent.length) {
+        recentLinksList.innerHTML = `<div class="text-slate-500 py-1">Nenhum link recente salvo.</div>`;
+        return;
+      }
+      recentLinksList.innerHTML = '';
+      recent.forEach(r => {
+        const item = document.createElement('div');
+        item.className = 'flex items-center justify-between py-1.5 px-2 hover:bg-slate-900 rounded-lg cursor-pointer transition';
+        item.onclick = () => {
+          urlInput.value = r.url;
+          recentLinksContainer.classList.add('hidden');
+          inspectForm.dispatchEvent(new Event('submit'));
+        };
+        item.innerHTML = `
+          <div class="truncate flex-1 pr-2 text-slate-300 font-medium">${r.title}</div>
+          <i class="fa-solid fa-arrow-right text-[10px] text-slate-600"></i>
+        `;
+        recentLinksList.appendChild(item);
+      });
+    }
+
+    window.clearHistory = () => {
+      localStorage.removeItem('clonp_recent_links');
+      renderRecentLinks();
+    };
 
     function setViewMode(mode) {
       currentViewMode = mode;
@@ -353,7 +492,7 @@
 
       sortDropdown.classList.add('hidden');
       if (currentFolderNode) {
-        renderFolder(currentFolderNode, filterInput.value.trim());
+        renderFolder(currentFolderNode);
       }
     };
 
@@ -443,6 +582,75 @@
       return ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac', 'opus'].includes(ext);
     }
 
+    // Controle de Seleção em Lote
+    window.toggleSelectMode = () => {
+      isSelectionMode = !isSelectionMode;
+      const btn = document.getElementById('toggleSelectModeBtn');
+      const toolbar = document.getElementById('batchActionToolbar');
+
+      if (isSelectionMode) {
+        btn.classList.add('bg-brand', 'text-white');
+        btn.classList.remove('bg-slate-900', 'text-slate-300');
+        toolbar.classList.remove('hidden');
+      } else {
+        btn.classList.remove('bg-brand', 'text-white');
+        btn.classList.add('bg-slate-900', 'text-slate-300');
+        toolbar.classList.add('hidden');
+        selectedItemIds.clear();
+      }
+      updateBatchUI();
+      renderFolder(currentFolderNode);
+    };
+
+    function updateBatchUI() {
+      document.getElementById('selectedCountText').textContent = `${selectedItemIds.size} selecionado(s)`;
+    }
+
+    window.selectAllCurrentFolder = () => {
+      if (!currentFolderNode || !currentFolderNode.children) return;
+      currentFolderNode.children.forEach(c => {
+        if (!c.isDirectory) selectedItemIds.add(c.id);
+      });
+      updateBatchUI();
+      renderFolder(currentFolderNode);
+    };
+
+    window.downloadSelectedBatch = async () => {
+      if (selectedItemIds.size === 0) {
+        showToast('Nenhum arquivo selecionado.');
+        return;
+      }
+      showToast('Preparando download do pacote...');
+      const ids = Array.from(selectedItemIds);
+      
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = '/api/download-batch';
+      form.target = '_blank';
+
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'payload';
+      
+      // Envia via fetch com blob download para manter seguro
+      try {
+        const res = await fetch('/api/download-batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids, zipName: 'selecao_clonp' })
+        });
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'selecao_clonp.zip';
+        a.click();
+        window.URL.revokeObjectURL(url);
+      } catch (err) {
+        showToast('Erro ao baixar lote.');
+      }
+    };
+
     inspectForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const url = urlInput.value.trim();
@@ -468,6 +676,8 @@
         rootNode = data.tree;
         currentFolderNode = rootNode;
         pathStack = [{ name: data.name || 'Início', node: rootNode }];
+
+        saveRecentLink(url, data.name || 'Pasta MEGA');
 
         setViewMode(currentViewMode);
         renderBreadcrumbs();
@@ -508,7 +718,6 @@
           btn.onclick = () => {
             pathStack = pathStack.slice(0, index + 1);
             currentFolderNode = entry.node;
-            filterInput.value = '';
             renderBreadcrumbs();
             renderFolder(currentFolderNode);
           };
@@ -518,7 +727,6 @@
         breadcrumbs.appendChild(item);
       });
 
-      // Auto scroll breadcrumbs para a direita no mobile
       breadcrumbs.scrollLeft = breadcrumbs.scrollWidth;
     }
 
@@ -527,6 +735,9 @@
       let children = folderNode.children || [];
 
       children = sortItems(children);
+
+      // Atualiza lista de itens visualizáveis para a galeria swipe
+      viewableItemsList = children.filter(c => !c.isDirectory && isViewable(c.name));
 
       // Botão "Voltar"
       if (pathStack.length > 1) {
@@ -540,10 +751,10 @@
             <span class="font-bold text-xs text-slate-200">.. Voltar pasta</span>
           `;
         } else {
-          backCard.className = 'bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800/80 rounded-xl p-3 flex items-center space-x-3 cursor-pointer text-slate-300 active:scale-[0.99] transition touch-target';
+          backCard.className = 'p-3 flex items-center space-x-3 cursor-pointer text-slate-300 hover:bg-slate-800/40 active:scale-[0.99] transition touch-target border-b border-slate-800/80';
           backCard.innerHTML = `
-            <div class="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-brand">
-              <i class="fa-solid fa-arrow-turn-up text-sm"></i>
+            <div class="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center text-brand">
+              <i class="fa-solid fa-arrow-turn-up text-xs"></i>
             </div>
             <span class="font-bold text-xs text-slate-200">.. Voltar pasta</span>
           `;
@@ -572,10 +783,11 @@
         const isImg = isImage(item.name);
         const isVid = isVideo(item.name);
         const fullStreamUrl = `${window.location.origin}/api/stream/${item.id}`;
+        const isSelected = selectedItemIds.has(item.id);
 
         if (currentViewMode === 'grid') {
           // ================= MODO GRADE =================
-          card.className = 'bg-darkcard border border-slate-800/80 rounded-2xl p-2.5 flex flex-col justify-between transition hover:border-slate-700 active:scale-[0.98] select-none cursor-pointer group shadow-sm';
+          card.className = `bg-darkcard border ${isSelected ? 'border-brand ring-1 ring-brand' : 'border-slate-800/80'} rounded-2xl p-2.5 flex flex-col justify-between transition hover:border-slate-700 active:scale-[0.98] select-none cursor-pointer group shadow-sm relative`;
 
           if (item.isDirectory) {
             card.onclick = () => enterFolder(item.id);
@@ -589,8 +801,14 @@
               </div>
             `;
           } else {
-            // Clicar em qualquer lugar do card abre o arquivo direto
             card.onclick = () => {
+              if (isSelectionMode) {
+                if (selectedItemIds.has(item.id)) selectedItemIds.delete(item.id);
+                else selectedItemIds.add(item.id);
+                updateBatchUI();
+                renderFolder(currentFolderNode);
+                return;
+              }
               if (canView) {
                 openPlayer(item.id, encodeURIComponent(item.name), item.subtitleId || '');
               } else {
@@ -599,25 +817,15 @@
             };
 
             let thumbnailHtml = '';
-
             if (isImg) {
-              // Miniatura de imagem real com indicador de carregamento
               thumbnailHtml = `
                 <div class="w-full h-28 rounded-xl overflow-hidden bg-slate-950 border border-slate-800/80 flex items-center justify-center mb-2 relative group-hover:border-slate-700 transition">
-                  <img 
-                    src="${fullStreamUrl}" 
-                    alt="${item.name}" 
-                    loading="lazy" 
-                    decoding="async"
-                    class="w-full h-full object-cover transition-opacity duration-300 opacity-0"
-                    onload="this.classList.remove('opacity-0')"
-                  >
+                  <img src="${fullStreamUrl}" alt="${item.name}" loading="lazy" decoding="async" class="w-full h-full object-cover transition-opacity duration-300 opacity-0" onload="this.classList.remove('opacity-0')">
                   <div class="absolute bottom-1.5 right-1.5 bg-black/60 backdrop-blur-sm p-1 rounded-md text-[9px] text-emerald-400 leading-none">
                     <i class="fa-solid fa-image"></i>
                   </div>
                 </div>`;
             } else if (isVid) {
-              // Em vez de puxar o stream de vídeo que concorre por banda, exibe um card com gradiente e play instantâneo
               thumbnailHtml = `
                 <div class="w-full h-28 rounded-xl overflow-hidden bg-gradient-to-tr from-slate-950 via-slate-900 to-indigo-950/40 border border-slate-800/80 flex items-center justify-center mb-2 relative group-hover:border-slate-700 transition">
                   <div class="w-10 h-10 rounded-full bg-brand/90 text-white flex items-center justify-center shadow-lg group-hover:scale-110 transition">
@@ -641,14 +849,21 @@
                 </div>`;
             }
 
+            // Checkbox de seleção se ativo
+            const checkMark = isSelectionMode 
+              ? `<div class="absolute top-2 left-2 w-5 h-5 rounded-md ${isSelected ? 'bg-brand text-white' : 'bg-black/50 text-transparent border border-white/40'} flex items-center justify-center text-xs">
+                   <i class="fa-solid fa-check"></i>
+                 </div>`
+              : '';
+
             card.innerHTML = `
+              ${checkMark}
               <div class="flex flex-col items-center text-center py-0.5 flex-1 justify-center min-w-0">
                 ${thumbnailHtml}
                 <div class="font-medium text-[11px] text-slate-200 line-clamp-2 w-full break-words leading-tight" title="${item.name}">${item.name}</div>
                 <div class="text-[10px] text-slate-400 font-mono mt-1">${item.formattedSize}</div>
               </div>
 
-              <!-- Ação de Baixar -->
               <div class="flex items-center pt-2 border-t border-slate-800/60 mt-1 justify-center" onclick="event.stopPropagation()">
                 <a 
                   href="/api/stream/${item.id}?download=1" 
@@ -663,8 +878,8 @@
           }
 
         } else {
-          // ================= MODO LISTA COMPACTA (Estilo MEGA / Explorer) =================
-          card.className = 'p-3 flex items-center justify-between gap-3 hover:bg-slate-800/40 active:bg-slate-800/70 transition cursor-pointer select-none';
+          // ================= MODO LISTA COMPACTA =================
+          card.className = `p-3 flex items-center justify-between gap-3 hover:bg-slate-800/40 ${isSelected ? 'bg-brand/10' : ''} active:bg-slate-800/70 transition cursor-pointer select-none`;
 
           if (item.isDirectory) {
             card.onclick = () => enterFolder(item.id);
@@ -682,6 +897,13 @@
             `;
           } else {
             card.onclick = () => {
+              if (isSelectionMode) {
+                if (selectedItemIds.has(item.id)) selectedItemIds.delete(item.id);
+                else selectedItemIds.add(item.id);
+                updateBatchUI();
+                renderFolder(currentFolderNode);
+                return;
+              }
               if (canView) {
                 openPlayer(item.id, encodeURIComponent(item.name), item.subtitleId || '');
               } else {
@@ -691,14 +913,21 @@
 
             const previewIconOrThumb = isImg 
               ? `<div class="w-8 h-8 rounded-lg overflow-hidden bg-slate-900 border border-slate-800 flex-shrink-0">
-                   <img src="${fullStreamUrl}" alt="${item.name}" loading="lazy" class="w-full h-full object-cover">
+                   <img src="${fullStreamUrl}" alt="${item.name}" loading="lazy" decoding="async" class="w-full h-full object-cover">
                  </div>`
               : `<div class="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center flex-shrink-0">
                    <i class="fa-solid ${iconClass} text-xs"></i>
                  </div>`;
 
+            const checkMarkList = isSelectionMode
+              ? `<div class="w-4 h-4 rounded ${isSelected ? 'bg-brand text-white' : 'border border-slate-600'} flex items-center justify-center text-[10px] mr-1 flex-shrink-0">
+                   ${isSelected ? '<i class="fa-solid fa-check"></i>' : ''}
+                 </div>`
+              : '';
+
             card.innerHTML = `
-              <div class="flex items-center space-x-3 min-w-0 flex-1">
+              <div class="flex items-center space-x-2.5 min-w-0 flex-1">
+                ${checkMarkList}
                 ${previewIconOrThumb}
                 <div class="min-w-0 flex-1">
                   <div class="font-medium text-xs sm:text-sm text-slate-200 truncate leading-tight">${item.name}</div>
@@ -711,7 +940,6 @@
                 </div>
               </div>
 
-              <!-- Botão de Baixar Rápido -->
               <div onclick="event.stopPropagation()">
                 <a 
                   href="/api/stream/${item.id}?download=1" 
@@ -755,12 +983,11 @@
       }
     };
 
-    // 1. Suporte nativo ao Botão Voltar do Android / Navegador
     window.addEventListener('popstate', (e) => {
       goBackFolder();
     });
 
-    // 2. Gesto de Deslizar para Voltar no Touch (Swipe Right)
+    // Touch Swipe: Voltar pasta ou passar galeria
     let touchStartX = 0;
     let touchStartY = 0;
 
@@ -779,16 +1006,31 @@
       const diffX = touchEndX - touchStartX;
       const diffY = Math.abs(touchEndY - touchStartY);
 
-      // Deslizar para a direita (mais de 75px na horizontal e com desvio vertical pequeno)
-      if (diffX > 75 && diffY < 60 && touchStartX < 90) {
-        goBackFolder();
+      if (diffY < 70) {
+        if (!mediaModal.classList.contains('hidden')) {
+          // Swipe dentro da galeria (Próximo / Anterior)
+          if (diffX > 60) navigateGallery(-1);
+          else if (diffX < -60) navigateGallery(1);
+        } else {
+          // Swipe da borda esquerda para voltar pasta
+          if (diffX > 75 && touchStartX < 90) {
+            goBackFolder();
+          }
+        }
       }
     }, { passive: true });
 
-    window.copyStreamLink = (link) => {
-      navigator.clipboard.writeText(link).then(() => {
-        showToast('Link do stream copiado! Cole no VLC (Ctrl+N)');
-      });
+    // Navegação de Galeria (Carrossel)
+    window.navigateGallery = (direction) => {
+      if (!viewableItemsList.length) return;
+      currentGalleryIndex += direction;
+      if (currentGalleryIndex < 0) currentGalleryIndex = viewableItemsList.length - 1;
+      if (currentGalleryIndex >= viewableItemsList.length) currentGalleryIndex = 0;
+
+      const target = viewableItemsList[currentGalleryIndex];
+      if (target) {
+        openPlayer(target.id, encodeURIComponent(target.name), target.subtitleId || '');
+      }
     };
 
     window.openPlayer = (id, encodedName, subtitleId) => {
@@ -802,6 +1044,13 @@
       const ext = name.split('.').pop().toLowerCase();
       currentStreamUrl = `${window.location.origin}/api/stream/${id}`;
 
+      // Localiza índice na galeria
+      const foundIdx = viewableItemsList.findIndex(it => it.id === id);
+      if (foundIdx !== -1) {
+        currentGalleryIndex = foundIdx;
+        galleryCounter.textContent = `${currentGalleryIndex + 1} / ${viewableItemsList.length}`;
+      }
+
       const modalDownloadBtn = document.getElementById('modalDownloadBtn');
       if (modalDownloadBtn) {
         modalDownloadBtn.href = `${currentStreamUrl}?download=1`;
@@ -810,21 +1059,18 @@
       mediaPlayerWrapper.innerHTML = '';
 
       if (isImage(name)) {
-        // Visualizador de Imagens em Tela Cheia Nativa
         mediaPlayerWrapper.innerHTML = `
           <div class="w-full h-full flex items-center justify-center p-1 bg-black overflow-hidden select-none">
             <img src="${currentStreamUrl}" alt="${name}" class="max-h-[82vh] max-w-full w-auto h-auto object-contain shadow-2xl transition-transform duration-200">
           </div>
         `;
       } else if (isPdf(name)) {
-        // Visualizador de PDFs em Tela Cheia
         mediaPlayerWrapper.innerHTML = `
           <div class="w-full h-[82vh] bg-slate-900 rounded-lg overflow-hidden">
             <iframe src="${currentStreamUrl}" class="w-full h-full border-0"></iframe>
           </div>
         `;
       } else if (['txt', 'log'].includes(ext)) {
-        // Visualizador de Texto
         mediaPlayerWrapper.innerHTML = `<div class="p-4 text-xs text-slate-400">Carregando visualização...</div>`;
         fetch(currentStreamUrl)
           .then(r => r.text())
@@ -837,7 +1083,6 @@
             mediaPlayerWrapper.innerHTML = `<div class="p-4 text-xs text-rose-400">Não foi possível carregar a pré-visualização.</div>`;
           });
       } else if (isAudio(name)) {
-        // Player de Áudio
         mediaPlayerWrapper.innerHTML = `
           <div class="p-8 w-full flex flex-col items-center justify-center">
             <i class="fa-solid fa-compact-disc fa-spin text-6xl text-brand mb-6"></i>
@@ -850,7 +1095,7 @@
           controls: ['play', 'progress', 'current-time', 'duration', 'mute', 'volume']
         });
       } else {
-        // Player de Vídeo em Tela Cheia Expandida (MP4, MKV, WebM, MOV)
+        // Player de Vídeo com Retomada de Posição (Resume Playback)
         const video = document.createElement('video');
         video.id = 'playerTarget';
         video.controls = true;
@@ -862,7 +1107,6 @@
           tracksHtml = `<track kind="captions" label="Português / Legenda" src="/api/subtitles/${subtitleId}" srclang="pt" default>`;
         }
 
-        // Mapeia o tipo MIME correto de acordo com a extensão do vídeo
         let videoMime = 'video/mp4';
         if (ext === 'webm') videoMime = 'video/webm';
         else if (ext === 'mov') videoMime = 'video/quicktime';
@@ -879,6 +1123,23 @@
             'mute', 'volume', 'captions', 'settings', 'pip', 'fullscreen'
           ],
           speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 2] }
+        });
+
+        // Lembrar última posição assistida
+        const resumeStorageKey = `clonp_resume_${id}`;
+        const savedTime = localStorage.getItem(resumeStorageKey);
+
+        activePlyr.on('loadedmetadata', () => {
+          if (savedTime && parseFloat(savedTime) > 5) {
+            activePlyr.currentTime = parseFloat(savedTime);
+            showToast(`Retomando aos ${Math.floor(parseFloat(savedTime) / 60)}m${Math.floor(parseFloat(savedTime) % 60)}s`);
+          }
+        });
+
+        activePlyr.on('timeupdate', () => {
+          if (activePlyr.currentTime > 5) {
+            localStorage.setItem(resumeStorageKey, activePlyr.currentTime);
+          }
         });
       }
 
