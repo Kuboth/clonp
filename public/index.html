@@ -697,6 +697,88 @@
       }
     });
 
+    // Fila sequencial e controlada para gerar miniaturas de vídeo sob demanda (1 por vez)
+    const videoThumbQueue = [];
+    let isProcessingVideoThumb = false;
+    const videoThumbCache = new Map();
+
+    const videoThumbObserver = new IntersectionObserver((entries, observer) => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        const container = entry.target;
+        observer.unobserve(container);
+
+        const videoId = container.dataset.videoId;
+        if (!videoId) return;
+
+        // Se já temos a miniatura no cache da sessão, aplica direto
+        if (videoThumbCache.has(videoId)) {
+          applyVideoThumb(container, videoThumbCache.get(videoId));
+          return;
+        }
+
+        videoThumbQueue.push({ videoId, container });
+        processNextVideoThumb();
+      });
+    }, { rootMargin: '100px' });
+
+    function applyVideoThumb(container, dataUrl) {
+      container.innerHTML = `
+        <img src="${dataUrl}" class="w-full h-full object-cover transition-opacity duration-300 opacity-0" onload="this.classList.remove('opacity-0')">
+      `;
+    }
+
+    function processNextVideoThumb() {
+      if (isProcessingVideoThumb || videoThumbQueue.length === 0) return;
+      isProcessingVideoThumb = true;
+
+      const { videoId, container } = videoThumbQueue.shift();
+      const video = document.createElement('video');
+      video.muted = true;
+      video.playsInline = true;
+      video.preload = 'metadata';
+      video.crossOrigin = 'anonymous';
+
+      let cleanedUp = false;
+      const cleanup = () => {
+        if (cleanedUp) return;
+        cleanedUp = true;
+        video.src = '';
+        video.load();
+        video.remove();
+        isProcessingVideoThumb = false;
+        setTimeout(processNextVideoThumb, 80); // Pequeno intervalo para liberar CPU/Render
+      };
+
+      const timeout = setTimeout(cleanup, 4500); // 4.5s max para não travar a fila
+
+      video.addEventListener('loadeddata', () => {
+        video.currentTime = Math.min(1.0, (video.duration || 10) / 4);
+      }, { once: true });
+
+      video.addEventListener('seeked', () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = 240;
+          canvas.height = 135;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(video, 0, 0, 240, 135);
+          const thumbUrl = canvas.toDataURL('image/jpeg', 0.65);
+          videoThumbCache.set(videoId, thumbUrl);
+          applyVideoThumb(container, thumbUrl);
+        } catch (e) {}
+        clearTimeout(timeout);
+        cleanup();
+      }, { once: true });
+
+      video.addEventListener('error', () => {
+        clearTimeout(timeout);
+        cleanup();
+      }, { once: true });
+
+      video.src = `${window.location.origin}/api/stream/${videoId}`;
+    }
+
     function renderBreadcrumbs() {
       breadcrumbs.innerHTML = '';
       pathStack.forEach((entry, index) => {
@@ -859,14 +941,11 @@
               </div>`;
           } else if (isVid) {
             thumbnailHtml = `
-              <div class="w-full h-28 rounded-xl overflow-hidden bg-gradient-to-tr from-slate-950 via-slate-900 to-indigo-950/40 border border-slate-800/80 flex flex-col items-center justify-center mb-2 relative group-hover:border-slate-700 transition">
+              <div class="video-thumb-container w-full h-28 rounded-xl overflow-hidden bg-gradient-to-tr from-slate-950 via-slate-900 to-indigo-950/40 border border-slate-800/80 flex flex-col items-center justify-center mb-2 relative group-hover:border-slate-700 transition" data-video-id="${item.id}">
                 <div class="w-11 h-11 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mb-1 group-hover:scale-110 transition">
                   <i class="fa-solid fa-film text-xl"></i>
                 </div>
                 <span class="text-[9px] text-slate-400 uppercase font-mono tracking-wider">${item.extension || 'VIDEO'}</span>
-                <div class="absolute bottom-1.5 right-1.5 bg-black/60 backdrop-blur-sm p-1 rounded-md text-[9px] text-indigo-400 leading-none">
-                  <i class="fa-solid fa-play"></i>
-                </div>
               </div>`;
           } else if (isPdf(item.name)) {
             thumbnailHtml = `
@@ -980,6 +1059,11 @@
             </div>
           `;
         }
+      }
+
+      const videoThumbTarget = card.querySelector('.video-thumb-container');
+      if (videoThumbTarget) {
+        videoThumbObserver.observe(videoThumbTarget);
       }
 
       return card;
