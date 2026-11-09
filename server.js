@@ -241,7 +241,8 @@ app.get('/api/stream/:id', streamLimiter, async (req, res) => {
 
     const headers = {
       'Content-Type': mimeType,
-      'Accept-Ranges': 'bytes'
+      'Accept-Ranges': 'bytes',
+      'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800' // Cache de 24h no navegador para miniaturas instantâneas
     };
 
     if (isDownload) {

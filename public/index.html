@@ -602,20 +602,24 @@
               // Miniatura de imagem real com indicador de carregamento
               thumbnailHtml = `
                 <div class="w-full h-28 rounded-xl overflow-hidden bg-slate-950 border border-slate-800/80 flex items-center justify-center mb-2 relative group-hover:border-slate-700 transition">
-                  <img src="${fullStreamUrl}" alt="${item.name}" loading="lazy" class="w-full h-full object-cover">
+                  <img 
+                    src="${fullStreamUrl}" 
+                    alt="${item.name}" 
+                    loading="lazy" 
+                    decoding="async"
+                    class="w-full h-full object-cover transition-opacity duration-300 opacity-0"
+                    onload="this.classList.remove('opacity-0')"
+                  >
                   <div class="absolute bottom-1.5 right-1.5 bg-black/60 backdrop-blur-sm p-1 rounded-md text-[9px] text-emerald-400 leading-none">
                     <i class="fa-solid fa-image"></i>
                   </div>
                 </div>`;
             } else if (isVid) {
-              // Prévia de vídeo real via elemento de vídeo HTML5 com Range Request
+              // Em vez de puxar o stream de vídeo que concorre por banda, exibe um card com gradiente e play instantâneo
               thumbnailHtml = `
-                <div class="w-full h-28 rounded-xl overflow-hidden bg-slate-950 border border-slate-800/80 flex items-center justify-center mb-2 relative group-hover:border-slate-700 transition">
-                  <video src="${fullStreamUrl}#t=1" preload="metadata" muted playsinline class="w-full h-full object-cover pointer-events-none"></video>
-                  <div class="absolute inset-0 bg-black/25 flex items-center justify-center group-hover:bg-black/10 transition">
-                    <div class="w-8 h-8 rounded-full bg-brand/90 text-white flex items-center justify-center shadow-md">
-                      <i class="fa-solid fa-play text-[10px] ml-0.5"></i>
-                    </div>
+                <div class="w-full h-28 rounded-xl overflow-hidden bg-gradient-to-tr from-slate-950 via-slate-900 to-indigo-950/40 border border-slate-800/80 flex items-center justify-center mb-2 relative group-hover:border-slate-700 transition">
+                  <div class="w-10 h-10 rounded-full bg-brand/90 text-white flex items-center justify-center shadow-lg group-hover:scale-110 transition">
+                    <i class="fa-solid fa-play text-xs ml-0.5"></i>
                   </div>
                   <div class="absolute bottom-1.5 right-1.5 bg-black/60 backdrop-blur-sm p-1 rounded-md text-[9px] text-indigo-400 leading-none">
                     <i class="fa-solid fa-video"></i>
