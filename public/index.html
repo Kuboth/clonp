@@ -279,7 +279,6 @@
     const errorMessage = document.getElementById('errorMessage');
     const fileListContainer = document.getElementById('fileListContainer');
     const breadcrumbs = document.getElementById('breadcrumbs');
-    const filterInput = document.getElementById('filterInput');
     const btnDownloadAll = document.getElementById('btnDownloadAll');
 
     // Elementos de Ordenação
@@ -689,16 +688,11 @@
       if (targetFolder) {
         pathStack.push({ name: targetFolder.name, node: targetFolder });
         currentFolderNode = targetFolder;
-        filterInput.value = '';
         renderBreadcrumbs();
         renderFolder(currentFolderNode);
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
     };
-
-    filterInput.addEventListener('input', (e) => {
-      renderFolder(currentFolderNode, e.target.value.trim());
-    });
 
     window.copyStreamLink = (link) => {
       navigator.clipboard.writeText(link).then(() => {
