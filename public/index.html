@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="pt-BR" class="dark">
-
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Clonr Pro - Navegador de Pastas & Debrid MEGA</title>
-
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1120" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Clonr Pro - Mobile</title>
+  
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -24,246 +26,235 @@
   </script>
 
   <!-- FontAwesome & Plyr CSS -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
   <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
-
+  
   <style>
     :root {
       --plyr-color-main: #ef4444;
     }
-
+    /* Suporte a touch e safe area no iPhone */
+    body {
+      padding-bottom: env(safe-area-inset-bottom);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .touch-target {
+      min-height: 44px;
+      min-width: 44px;
+    }
     .plyr--video {
       border-radius: 0.75rem;
       overflow: hidden;
     }
+    /* Estilização suave da barra de rolagem */
+    ::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
   </style>
 </head>
+<body class="bg-darkbg text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-brand selection:text-white pb-6">
 
-<body
-  class="bg-darkbg text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-brand selection:text-white">
-
-  <!-- Header -->
-  <header class="border-b border-slate-800 bg-slate-900/60 backdrop-blur sticky top-0 z-50">
-    <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-      <div class="flex items-center space-x-3">
-        <div
-          class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand to-rose-400 flex items-center justify-center shadow-lg shadow-brand/20">
-          <i class="fa-solid fa-folder-tree text-white text-lg"></i>
+  <!-- Header Mobile Otimizado -->
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-50 px-4 py-3">
+    <div class="max-w-4xl mx-auto flex items-center justify-between">
+      <div class="flex items-center space-x-2.5">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand to-rose-400 flex items-center justify-center shadow-md shadow-brand/20">
+          <i class="fa-solid fa-folder-tree text-white text-base"></i>
         </div>
         <div>
-          <span class="font-extrabold text-xl tracking-tight text-white">Clonr<span
-              class="text-brand">.Pro</span></span>
-          <span class="text-[10px] bg-brand/20 text-brand px-1.5 py-0.5 rounded ml-1 font-semibold">EXPLORER</span>
+          <span class="font-extrabold text-lg tracking-tight text-white">Clonr<span class="text-brand">.Pro</span></span>
         </div>
       </div>
-      <div class="flex items-center space-x-3 text-xs">
-        <div
-          class="flex items-center space-x-1.5 bg-slate-800/80 px-2.5 py-1 rounded-full border border-slate-700/60 text-slate-400">
-          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span>Navegação Hierárquica Ativa</span>
-        </div>
+      <div class="flex items-center space-x-1.5 bg-slate-800 px-2.5 py-1 rounded-full border border-slate-700/60 text-[11px] text-slate-300">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span>Online</span>
       </div>
     </div>
   </header>
 
   <!-- Main Container -->
-  <main class="max-w-6xl mx-auto px-4 py-8 flex-1 w-full space-y-6">
+  <main class="max-w-4xl mx-auto px-3.5 py-4 flex-1 w-full space-y-4">
 
-    <!-- Input Box -->
-    <div class="bg-darkcard border border-slate-800 rounded-2xl p-6 shadow-xl relative overflow-hidden">
-      <div class="absolute -right-10 -bottom-10 w-52 h-52 bg-brand/5 rounded-full blur-3xl pointer-events-none"></div>
+    <!-- Card de Inserção de Link -->
+    <div class="bg-darkcard border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-lg relative overflow-hidden">
+      <h1 class="text-lg sm:text-xl font-bold mb-3 flex items-center space-x-2">
+        <i class="fa-solid fa-cloud-arrow-down text-brand"></i>
+        <span>Colar link MEGA</span>
+      </h1>
 
-      <h1 class="text-2xl font-bold mb-4">Colar link MEGA</h1>
-
-      <form id="inspectForm" class="flex flex-col sm:flex-row gap-3">
-        <div class="relative flex-1">
+      <form id="inspectForm" class="flex flex-col gap-2.5">
+        <div class="relative">
           <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
-            <i class="fa-solid fa-link"></i>
+            <i class="fa-solid fa-link text-xs"></i>
           </div>
-          <input type="url" id="urlInput" required
-            placeholder="https://mega.nz/folder/... ou https://mega.nz/file/...#chave"
-            class="w-full pl-10 pr-4 py-3 bg-slate-900/90 border border-slate-700 rounded-xl focus:border-brand focus:ring-1 focus:ring-brand focus:outline-none transition-all placeholder:text-slate-500 text-sm" />
+          <input 
+            type="url" 
+            id="urlInput"
+            required
+            inputmode="url"
+            autocomplete="off"
+            placeholder="Cole o link https://mega.nz/..." 
+            class="w-full pl-9 pr-3 py-3 bg-slate-900 border border-slate-700 rounded-xl focus:border-brand focus:ring-1 focus:ring-brand focus:outline-none transition-all placeholder:text-slate-500 text-sm"
+          />
         </div>
-        <button type="submit" id="btnInspect"
-          class="px-6 py-3 bg-brand hover:bg-rose-600 text-white font-medium text-sm rounded-xl transition flex items-center justify-center space-x-2 shadow-lg shadow-brand/20 active:scale-95 cursor-pointer">
+        <button 
+          type="submit" 
+          id="btnInspect"
+          class="w-full py-3 bg-brand active:bg-rose-600 text-white font-semibold text-sm rounded-xl transition flex items-center justify-center space-x-2 shadow-md shadow-brand/25 cursor-pointer touch-target">
           <i class="fa-solid fa-folder-open"></i>
-          <span>Explorar</span>
+          <span>Explorar Arquivos</span>
         </button>
       </form>
-
+      
       <!-- Erro -->
-      <div id="errorBox"
-        class="hidden mt-4 p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-sm flex items-start space-x-3">
+      <div id="errorBox" class="hidden mt-3 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-start space-x-2.5">
         <i class="fa-solid fa-triangle-exclamation mt-0.5"></i>
         <div id="errorMessage"></div>
       </div>
     </div>
 
     <!-- Spinner de carregamento -->
-    <div id="loadingBox" class="hidden flex-col items-center justify-center py-16 space-y-4">
-      <div class="w-12 h-12 border-4 border-slate-700 border-t-brand rounded-full animate-spin"></div>
-      <p class="text-slate-400 text-sm animate-pulse">Lendo estrutura de pastas e decodificando metadados...</p>
+    <div id="loadingBox" class="hidden flex-col items-center justify-center py-12 space-y-3">
+      <div class="w-10 h-10 border-3 border-slate-700 border-t-brand rounded-full animate-spin"></div>
+      <p class="text-slate-400 text-xs animate-pulse">Lendo estrutura do link...</p>
     </div>
 
     <!-- Resultados e Navegador -->
-    <div id="resultsBox" class="hidden space-y-4">
-
-      <!-- Barra Superior: Breadcrumbs, Ordenação e Busca -->
-      <div
-        class="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-900/70 p-4 rounded-xl border border-slate-800">
-
-        <!-- Breadcrumbs (Caminho de Navegação) -->
-        <nav id="breadcrumbs" class="flex flex-wrap items-center gap-1.5 text-xs text-slate-300 font-medium">
+    <div id="resultsBox" class="hidden space-y-3">
+      
+      <!-- Barra Superior: Breadcrumbs -->
+      <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-800 flex items-center justify-between gap-2 overflow-x-auto">
+        <nav id="breadcrumbs" class="flex items-center gap-1.5 text-xs text-slate-300 font-medium whitespace-nowrap overflow-x-auto py-0.5">
           <!-- Início / Pasta ... -->
         </nav>
+      </div>
 
-        <!-- Controles: Ordenar, Buscar e Baixar Tudo -->
-        <div class="flex flex-wrap items-center gap-2">
+      <!-- Barra de Ferramentas Mobile: Busca e Ordenação -->
+      <div class="flex items-center gap-2">
+        <!-- Campo de Busca -->
+        <div class="relative flex-1">
+          <i class="fa-solid fa-filter absolute left-3 top-3 text-xs text-slate-500"></i>
+          <input 
+            type="text" 
+            id="filterInput" 
+            placeholder="Buscar arquivo..." 
+            class="w-full pl-8 pr-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs focus:border-brand focus:outline-none placeholder:text-slate-500"
+          />
+        </div>
 
-          <!-- Dropdown "Ordenar por" (Fiel à imagem do MEGA) -->
-          <div class="relative">
-            <button id="sortMenuBtn"
-              class="px-3 py-1.5 bg-slate-800 hover:bg-slate-750 border border-slate-700/80 rounded-lg text-xs font-medium text-slate-200 transition inline-flex items-center space-x-1.5 cursor-pointer shadow-sm">
-              <i class="fa-solid fa-arrow-down-short-wide text-brand"></i>
-              <span id="currentSortLabel">Nome</span>
-              <i class="fa-solid fa-chevron-down text-[10px] text-slate-400 ml-1"></i>
-            </button>
+        <!-- Botão Ordenar por -->
+        <div class="relative">
+          <button 
+            id="sortMenuBtn"
+            class="px-3 py-2 bg-slate-800 hover:bg-slate-750 border border-slate-700 rounded-xl text-xs font-medium text-slate-200 transition inline-flex items-center space-x-1.5 cursor-pointer touch-target shadow-sm">
+            <i class="fa-solid fa-arrow-down-short-wide text-brand"></i>
+            <span id="currentSortLabel" class="hidden sm:inline">Nome</span>
+          </button>
 
-            <!-- Menu Popup Ordenar por -->
-            <div id="sortDropdown"
-              class="hidden absolute right-0 mt-2 w-48 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-40 py-2 divide-y divide-slate-800/60 font-sans">
+          <!-- Dropdown Ordenar por -->
+          <div 
+            id="sortDropdown" 
+            class="hidden absolute right-0 mt-2 w-52 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl z-40 py-2 divide-y divide-slate-800/80 font-sans">
+            
+            <div class="px-3.5 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              Ordenar por
+            </div>
 
-              <div class="px-3 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                Ordenar por
-              </div>
+            <div class="py-1 text-xs text-slate-200">
+              <button onclick="changeSort('name')" class="w-full px-3.5 py-2.5 text-left hover:bg-slate-800 flex items-center justify-between transition cursor-pointer">
+                <span>Nome</span>
+                <i id="check_name" class="fa-solid fa-check text-brand text-xs"></i>
+              </button>
+              <button onclick="changeSort('date_desc')" class="w-full px-3.5 py-2.5 text-left hover:bg-slate-800 flex items-center justify-between transition cursor-pointer">
+                <span>Data de inclusão</span>
+                <i id="check_date_desc" class="fa-solid fa-check text-brand text-xs hidden"></i>
+              </button>
+              <button onclick="changeSort('date_asc')" class="w-full px-3.5 py-2.5 text-left hover:bg-slate-800 flex items-center justify-between transition cursor-pointer">
+                <span>Última alteração</span>
+                <i id="check_date_asc" class="fa-solid fa-check text-brand text-xs hidden"></i>
+              </button>
+              <button onclick="changeSort('type')" class="w-full px-3.5 py-2.5 text-left hover:bg-slate-800 flex items-center justify-between transition cursor-pointer">
+                <span>Tipo</span>
+                <i id="check_type" class="fa-solid fa-check text-brand text-xs hidden"></i>
+              </button>
+              <button onclick="changeSort('size')" class="w-full px-3.5 py-2.5 text-left hover:bg-slate-800 flex items-center justify-between transition cursor-pointer">
+                <span>Tamanho</span>
+                <i id="check_size" class="fa-solid fa-check text-brand text-xs hidden"></i>
+              </button>
+              <button onclick="changeSort('duration')" class="w-full px-3.5 py-2.5 text-left hover:bg-slate-800 flex items-center justify-between transition cursor-pointer">
+                <span>Duração / Extensão</span>
+                <i id="check_duration" class="fa-solid fa-check text-brand text-xs hidden"></i>
+              </button>
+            </div>
 
-              <div class="py-1 text-xs text-slate-200">
-                <button onclick="changeSort('name')"
-                  class="w-full px-3 py-2 text-left hover:bg-slate-800 flex items-center justify-between transition cursor-pointer">
-                  <span>Nome</span>
-                  <i id="check_name" class="fa-solid fa-check text-brand text-xs"></i>
-                </button>
-                <button onclick="changeSort('date_desc')"
-                  class="w-full px-3 py-2 text-left hover:bg-slate-800 flex items-center justify-between transition cursor-pointer">
-                  <span>Data de inclusão</span>
-                  <i id="check_date_desc" class="fa-solid fa-check text-brand text-xs hidden"></i>
-                </button>
-                <button onclick="changeSort('date_asc')"
-                  class="w-full px-3 py-2 text-left hover:bg-slate-800 flex items-center justify-between transition cursor-pointer">
-                  <span>Última alteração</span>
-                  <i id="check_date_asc" class="fa-solid fa-check text-brand text-xs hidden"></i>
-                </button>
-                <button onclick="changeSort('type')"
-                  class="w-full px-3 py-2 text-left hover:bg-slate-800 flex items-center justify-between transition cursor-pointer">
-                  <span>Tipo</span>
-                  <i id="check_type" class="fa-solid fa-check text-brand text-xs hidden"></i>
-                </button>
-                <button onclick="changeSort('size')"
-                  class="w-full px-3 py-2 text-left hover:bg-slate-800 flex items-center justify-between transition cursor-pointer">
-                  <span>Tamanho</span>
-                  <i id="check_size" class="fa-solid fa-check text-brand text-xs hidden"></i>
-                </button>
-                <button onclick="changeSort('duration')"
-                  class="w-full px-3 py-2 text-left hover:bg-slate-800 flex items-center justify-between transition cursor-pointer">
-                  <span>Duração / Extensão</span>
-                  <i id="check_duration" class="fa-solid fa-check text-brand text-xs hidden"></i>
-                </button>
-              </div>
-
-              <!-- Direção da Ordem (Crescente / Decrescente) -->
-              <div class="pt-1.5 px-3">
-                <button id="toggleDirectionBtn" onclick="toggleSortDirection()"
-                  class="w-full py-1 text-[11px] text-slate-400 hover:text-white flex items-center justify-between transition">
-                  <span id="directionLabel">Ordem: Crescente</span>
-                  <i id="directionIcon" class="fa-solid fa-arrow-up-a-z"></i>
-                </button>
-              </div>
+            <div class="pt-2 px-3.5 pb-1">
+              <button 
+                id="toggleDirectionBtn"
+                onclick="toggleSortDirection()" 
+                class="w-full py-1.5 text-xs text-slate-400 hover:text-white flex items-center justify-between transition">
+                <span id="directionLabel">Ordem: Crescente</span>
+                <i id="directionIcon" class="fa-solid fa-arrow-up-a-z text-brand"></i>
+              </button>
             </div>
           </div>
-
-          <!-- Filtro de Busca -->
-          <div class="relative w-44 sm:w-52">
-            <i class="fa-solid fa-filter absolute left-3 top-2.5 text-xs text-slate-500"></i>
-            <input type="text" id="filterInput" placeholder="Buscar nesta pasta..."
-              class="w-full pl-8 pr-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs focus:border-brand focus:outline-none placeholder:text-slate-600" />
-          </div>
-
-          <!-- Botão Baixar Tudo -->
-          <a id="btnDownloadAll" href="#"
-            class="hidden px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium transition items-center space-x-1.5 whitespace-nowrap shadow-sm">
-            <i class="fa-solid fa-file-zipper"></i>
-            <span>Baixar Tudo (.ZIP)</span>
-          </a>
-
         </div>
+
+        <!-- Botão Baixar Tudo -->
+        <a 
+          id="btnDownloadAll"
+          href="#" 
+          class="hidden px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold transition items-center space-x-1 whitespace-nowrap shadow-sm touch-target">
+          <i class="fa-solid fa-file-zipper"></i>
+          <span class="hidden sm:inline">Baixar (.ZIP)</span>
+        </a>
       </div>
 
-      <!-- Tabela / Lista de Itens da Pasta Atual -->
-      <div class="bg-darkcard border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
-        <div class="overflow-x-auto">
-          <table class="w-full text-left text-sm">
-            <thead class="bg-slate-900/80 text-xs uppercase tracking-wider text-slate-400 border-b border-slate-800">
-              <tr>
-                <th class="py-3 px-4">Nome</th>
-                <th class="py-3 px-4 w-36">Data</th>
-                <th class="py-3 px-4 w-28">Tamanho</th>
-                <th class="py-3 px-4 w-72 text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody id="filesTableBody" class="divide-y divide-slate-800/60 font-mono text-xs">
-              <!-- Renderizado via JS -->
-            </tbody>
-          </table>
-        </div>
+      <!-- Lista Mobile Card-Based de Arquivos -->
+      <div id="fileListContainer" class="space-y-2">
+        <!-- Itens injetados via JS -->
       </div>
+
     </div>
 
     <!-- Modal de Player de Mídia Avançado (Plyr) -->
-    <div id="mediaModal"
-      class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-      <div
-        class="bg-darkcard border border-slate-800 rounded-2xl max-w-4xl w-full p-4 relative shadow-2xl flex flex-col space-y-3">
-        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-          <div class="flex items-center space-x-2 truncate pr-4">
-            <span class="p-1 rounded bg-brand/20 text-brand text-xs font-bold uppercase">Streaming</span>
-            <h3 id="modalTitle" class="font-bold text-sm text-slate-200 truncate">Reproduzindo</h3>
+    <div id="mediaModal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/90 backdrop-blur-md">
+      <div class="bg-darkcard border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl max-w-3xl w-full p-4 relative shadow-2xl flex flex-col space-y-3 max-h-[92vh]">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+          <div class="flex items-center space-x-2 truncate pr-3">
+            <span class="p-1 rounded bg-brand/20 text-brand text-[10px] font-bold uppercase">Player</span>
+            <h3 id="modalTitle" class="font-bold text-xs sm:text-sm text-slate-200 truncate">Reproduzindo</h3>
           </div>
-          <button id="closeModalBtn" class="text-slate-400 hover:text-white p-1 rounded-lg">
+          <button id="closeModalBtn" class="text-slate-400 hover:text-white p-2 rounded-xl touch-target flex items-center justify-center">
             <i class="fa-solid fa-xmark text-lg"></i>
           </button>
         </div>
-
-        <div id="mediaPlayerWrapper"
-          class="w-full bg-black rounded-xl overflow-hidden flex items-center justify-center min-h-[300px]">
+        
+        <div id="mediaPlayerWrapper" class="w-full bg-black rounded-xl overflow-hidden flex items-center justify-center min-h-[240px]">
           <!-- Player injetado via JS -->
         </div>
 
-        <div class="flex items-center justify-between pt-1 text-[11px] text-slate-400">
-          <span>Atalhos: <kbd class="bg-slate-800 px-1 rounded">Espaço</kbd> Pausar &bull; <kbd
-              class="bg-slate-800 px-1 rounded">F</kbd> Tela cheia &bull; <kbd
-              class="bg-slate-800 px-1 rounded">&larr;/&rarr;</kbd> Pular 10s</span>
-          <button id="modalVlcBtn"
-            class="text-orange-400 hover:text-orange-300 flex items-center space-x-1 cursor-pointer">
-            <i class="fa-solid fa-arrow-up-right-from-square"></i>
-            <span>Abrir no VLC</span>
+        <div class="flex items-center justify-between pt-1 text-xs">
+          <span class="text-slate-400 text-[11px]">Stream Contínuo HTTP</span>
+          <button id="modalVlcBtn" class="text-orange-400 active:text-orange-300 flex items-center space-x-1.5 py-1 px-2.5 rounded-lg bg-slate-800/60 border border-slate-700/50">
+            <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+            <span>Copiar Link VLC</span>
           </button>
         </div>
       </div>
     </div>
 
     <!-- Toast de Notificação -->
-    <div id="toast"
-      class="hidden fixed bottom-6 right-6 bg-emerald-600 text-white px-4 py-2.5 rounded-xl shadow-xl text-xs flex items-center space-x-2 z-50">
+    <div id="toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-4 py-2.5 rounded-full shadow-2xl text-xs flex items-center space-x-2 z-50 whitespace-nowrap">
       <i class="fa-solid fa-check"></i>
       <span id="toastMsg">Link copiado!</span>
     </div>
 
   </main>
-
-  <!-- Footer -->
-  <footer class="border-t border-slate-800/80 py-4 text-center text-xs text-slate-500">
-    Clonr Pro &bull; Ordenação Fiel ao MEGA &bull; Streaming Direto HTTP 206
-  </footer>
 
   <!-- Plyr JS -->
   <script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
@@ -276,7 +267,7 @@
     const resultsBox = document.getElementById('resultsBox');
     const errorBox = document.getElementById('errorBox');
     const errorMessage = document.getElementById('errorMessage');
-    const filesTableBody = document.getElementById('filesTableBody');
+    const fileListContainer = document.getElementById('fileListContainer');
     const breadcrumbs = document.getElementById('breadcrumbs');
     const filterInput = document.getElementById('filterInput');
     const btnDownloadAll = document.getElementById('btnDownloadAll');
@@ -296,12 +287,11 @@
 
     let rootNode = null;
     let currentFolderNode = null;
-    let pathStack = [];
+    let pathStack = []; 
     let activePlyr = null;
     let currentStreamUrl = '';
 
-    // Estado da Ordenação
-    let currentSortBy = 'name'; // 'name', 'date_desc', 'date_asc', 'type', 'size', 'duration'
+    let currentSortBy = 'name';
     let isAscending = true;
 
     const sortLabels = {
@@ -313,7 +303,6 @@
       duration: 'Duração'
     };
 
-    // Toggle Dropdown
     sortMenuBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       sortDropdown.classList.toggle('hidden');
@@ -329,7 +318,6 @@
       currentSortBy = sortKey;
       currentSortLabel.textContent = sortLabels[sortKey];
 
-      // Atualiza marcas de check
       Object.keys(sortLabels).forEach(key => {
         const el = document.getElementById(`check_${key}`);
         if (el) {
@@ -347,7 +335,7 @@
     window.toggleSortDirection = () => {
       isAscending = !isAscending;
       directionLabel.textContent = isAscending ? 'Ordem: Crescente' : 'Ordem: Decrescente';
-      directionIcon.className = isAscending ? 'fa-solid fa-arrow-up-a-z' : 'fa-solid fa-arrow-down-z-a';
+      directionIcon.className = isAscending ? 'fa-solid fa-arrow-up-a-z text-brand' : 'fa-solid fa-arrow-down-z-a text-brand';
       if (currentFolderNode) {
         renderFolder(currentFolderNode, filterInput.value.trim());
       }
@@ -355,7 +343,6 @@
 
     function sortItems(items) {
       return [...items].sort((a, b) => {
-        // Pastas sempre no topo
         if (a.isDirectory && !b.isDirectory) return -1;
         if (!a.isDirectory && b.isDirectory) return 1;
 
@@ -364,10 +351,10 @@
           case 'name':
             result = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
             break;
-          case 'date_desc': // Data de inclusão (mais recente primeiro por padrão)
+          case 'date_desc':
             result = (b.timestamp || 0) - (a.timestamp || 0);
             break;
-          case 'date_asc': // Última alteração
+          case 'date_asc':
             result = (a.timestamp || 0) - (b.timestamp || 0);
             break;
           case 'type':
@@ -460,24 +447,24 @@
       pathStack.forEach((entry, index) => {
         const isLast = index === pathStack.length - 1;
         const item = document.createElement('div');
-        item.className = 'flex items-center space-x-1.5';
+        item.className = 'flex items-center space-x-1 flex-shrink-0';
 
         if (index > 0) {
           const sep = document.createElement('span');
-          sep.className = 'text-slate-600';
+          sep.className = 'text-slate-600 text-xs px-0.5';
           sep.textContent = '/';
           item.appendChild(sep);
         }
 
         if (isLast) {
           const span = document.createElement('span');
-          span.className = 'text-slate-100 font-bold flex items-center space-x-1';
-          span.innerHTML = `<i class="fa-solid fa-folder-open text-brand text-xs"></i> <span>${entry.name}</span>`;
+          span.className = 'text-white font-bold flex items-center space-x-1 bg-slate-800 px-2 py-1 rounded-lg';
+          span.innerHTML = `<i class="fa-solid fa-folder-open text-brand text-xs"></i> <span class="max-w-[120px] truncate">${entry.name}</span>`;
           item.appendChild(span);
         } else {
           const btn = document.createElement('button');
-          btn.className = 'text-slate-400 hover:text-brand transition flex items-center space-x-1 cursor-pointer';
-          btn.innerHTML = `<i class="fa-solid fa-folder text-slate-500 text-xs"></i> <span>${entry.name}</span>`;
+          btn.className = 'text-slate-400 hover:text-brand transition flex items-center space-x-1 cursor-pointer py-1 px-1';
+          btn.innerHTML = `<span class="max-w-[90px] truncate">${entry.name}</span>`;
           btn.onclick = () => {
             pathStack = pathStack.slice(0, index + 1);
             currentFolderNode = entry.node;
@@ -490,10 +477,13 @@
 
         breadcrumbs.appendChild(item);
       });
+
+      // Auto scroll breadcrumbs para a direita no mobile
+      breadcrumbs.scrollLeft = breadcrumbs.scrollWidth;
     }
 
     function renderFolder(folderNode, filterQuery = '') {
-      filesTableBody.innerHTML = '';
+      fileListContainer.innerHTML = '';
       let children = folderNode.children || [];
 
       if (filterQuery) {
@@ -501,110 +491,110 @@
         children = children.filter(c => c.name.toLowerCase().includes(q));
       }
 
-      // Aplica o algoritmo de ordenação selecionado
       children = sortItems(children);
 
-      // Linha de "Voltar"
+      // Botão "Voltar"
       if (pathStack.length > 1 && !filterQuery) {
-        const backTr = document.createElement('tr');
-        backTr.className = 'hover:bg-slate-800/40 transition-colors cursor-pointer text-slate-400';
-        backTr.onclick = () => {
+        const backCard = document.createElement('div');
+        backCard.className = 'bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800/80 rounded-xl p-3 flex items-center space-x-3 cursor-pointer text-slate-300 active:scale-[0.99] transition touch-target';
+        backCard.onclick = () => {
           pathStack.pop();
           currentFolderNode = pathStack[pathStack.length - 1].node;
           filterInput.value = '';
           renderBreadcrumbs();
           renderFolder(currentFolderNode);
         };
-        backTr.innerHTML = `
-          <td colspan="4" class="py-2.5 px-4 font-sans text-xs flex items-center space-x-2 text-slate-400 hover:text-white">
-            <i class="fa-solid fa-arrow-turn-up text-brand"></i>
-            <span class="font-bold">.. (Voltar para pasta anterior)</span>
-          </td>
+        backCard.innerHTML = `
+          <div class="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-brand">
+            <i class="fa-solid fa-arrow-turn-up text-sm"></i>
+          </div>
+          <span class="font-bold text-xs text-slate-200">.. Voltar pasta</span>
         `;
-        filesTableBody.appendChild(backTr);
+        fileListContainer.appendChild(backCard);
       }
 
       if (!children.length) {
-        const emptyTr = document.createElement('tr');
-        emptyTr.innerHTML = `<td colspan="4" class="py-8 text-center text-slate-500">Esta pasta está vazia.</td></tr>`;
-        filesTableBody.appendChild(emptyTr);
+        const empty = document.createElement('div');
+        empty.className = 'py-10 text-center text-slate-500 text-xs bg-slate-900/30 rounded-xl border border-dashed border-slate-800';
+        empty.textContent = 'Esta pasta está vazia.';
+        fileListContainer.appendChild(empty);
         return;
       }
 
       children.forEach(item => {
-        const tr = document.createElement('tr');
-        tr.className = 'hover:bg-slate-800/40 transition-colors';
+        const card = document.createElement('div');
+        card.className = 'bg-darkcard border border-slate-800/80 rounded-xl p-3 flex flex-col space-y-2.5 transition active:border-slate-700';
 
         if (item.isDirectory) {
-          // Subpasta
-          tr.innerHTML = `
-            <td class="py-3 px-4 font-sans text-sm cursor-pointer" onclick="enterFolder('${item.id}')">
-              <div class="flex items-center space-x-3">
-                <i class="fa-solid fa-folder text-brand text-base"></i>
-                <div class="truncate max-w-xs sm:max-w-md font-semibold text-slate-100 hover:text-brand transition" title="${item.name}">
-                  ${item.name}
+          // Card de Pasta
+          card.onclick = () => enterFolder(item.id);
+          card.classList.add('cursor-pointer');
+
+          card.innerHTML = `
+            <div class="flex items-center justify-between">
+              <div class="flex items-center space-x-3 min-w-0 flex-1">
+                <div class="w-9 h-9 rounded-xl bg-brand/10 border border-brand/20 flex items-center justify-center text-brand flex-shrink-0">
+                  <i class="fa-solid fa-folder text-base"></i>
+                </div>
+                <div class="min-w-0 flex-1">
+                  <div class="font-semibold text-sm text-slate-100 truncate">${item.name}</div>
+                  <div class="text-[11px] text-slate-500">${item.children ? item.children.length + ' item(ns)' : 'Pasta'}</div>
                 </div>
               </div>
-            </td>
-            <td class="py-3 px-4 text-slate-500 whitespace-nowrap text-xs">${item.formattedDate || '-'}</td>
-            <td class="py-3 px-4 text-slate-500 whitespace-nowrap">${item.children ? item.children.length + ' item(ns)' : '-'}</td>
-            <td class="py-3 px-4 text-right whitespace-nowrap">
-              <button 
-                onclick="enterFolder('${item.id}')"
-                class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-sans transition inline-flex items-center space-x-1 cursor-pointer">
-                <i class="fa-solid fa-folder-open text-xs text-brand"></i>
-                <span>Abrir</span>
-              </button>
-            </td>
+              <i class="fa-solid fa-chevron-right text-xs text-slate-600 pl-2"></i>
+            </div>
           `;
         } else {
-          // Arquivo
+          // Card de Arquivo
           const iconClass = getFileIcon(item.name);
           const canPlay = isMedia(item.name);
           const fullStreamUrl = `${window.location.origin}/api/stream/${item.id}`;
 
-          tr.innerHTML = `
-            <td class="py-3 px-4 font-sans text-sm">
-              <div class="flex items-center space-x-3">
-                <i class="fa-solid ${iconClass} text-base"></i>
-                <div class="truncate max-w-xs sm:max-w-md text-slate-200" title="${item.name}">
-                  ${item.name}
-                  ${item.subtitleId ? '<span class="ml-2 text-[10px] bg-yellow-500/20 text-yellow-400 px-1 py-0.5 rounded font-mono">Legenda Auto</span>' : ''}
+          card.innerHTML = `
+            <div class="flex items-start space-x-3 min-w-0">
+              <div class="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <i class="fa-solid ${iconClass} text-sm"></i>
+              </div>
+              <div class="min-w-0 flex-1">
+                <div class="font-medium text-xs sm:text-sm text-slate-200 break-words leading-tight">${item.name}</div>
+                <div class="flex items-center space-x-2 mt-1 text-[11px] text-slate-400 font-mono">
+                  <span>${item.formattedSize}</span>
+                  ${item.subtitleId ? '<span class="text-[9px] bg-yellow-500/20 text-yellow-400 px-1 py-0.5 rounded font-sans">Legenda</span>' : ''}
                 </div>
               </div>
-            </td>
-            <td class="py-3 px-4 text-slate-400 whitespace-nowrap text-xs">${item.formattedDate || '-'}</td>
-            <td class="py-3 px-4 text-slate-400 whitespace-nowrap">${item.formattedSize}</td>
-            <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+            </div>
+
+            <!-- Botões de Ação Otimizados para Touch -->
+            <div class="flex items-center gap-1.5 pt-1 border-t border-slate-800/60 justify-end">
               ${canPlay ? `
                 <button 
                   onclick="openPlayer('${item.id}', '${encodeURIComponent(item.name)}', '${item.subtitleId || ''}')" 
-                  class="px-2.5 py-1.5 bg-brand hover:bg-rose-600 text-white rounded-lg text-xs font-sans transition inline-flex items-center space-x-1 shadow-sm cursor-pointer">
+                  class="flex-1 sm:flex-none px-3 py-2 bg-brand active:bg-rose-600 text-white rounded-lg text-xs font-medium transition inline-flex items-center justify-center space-x-1.5 touch-target shadow-sm">
                   <i class="fa-solid fa-play text-xs"></i>
-                  <span>Tocar</span>
+                  <span>Assistir</span>
                 </button>
               ` : ''}
 
               <button 
                 onclick="copyStreamLink('${fullStreamUrl}')" 
-                title="Copiar link direto para abrir no VLC ou PotPlayer"
-                class="px-2 py-1.5 bg-slate-800 hover:bg-slate-700 text-orange-400 hover:text-orange-300 rounded-lg text-xs font-sans transition inline-flex items-center space-x-1 border border-slate-700/60 cursor-pointer">
-                <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                title="Copiar link VLC"
+                class="px-3 py-2 bg-slate-900 border border-slate-700/80 active:bg-slate-800 text-orange-400 rounded-lg text-xs font-medium transition inline-flex items-center justify-center space-x-1 touch-target">
+                <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i>
                 <span>VLC</span>
               </button>
 
               <a 
                 href="/api/stream/${item.id}?download=1" 
                 download 
-                class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-sans transition inline-flex items-center space-x-1 border border-slate-700/60">
+                class="flex-1 sm:flex-none px-3 py-2 bg-slate-800 active:bg-slate-750 text-slate-200 border border-slate-700/70 rounded-lg text-xs font-medium transition inline-flex items-center justify-center space-x-1.5 touch-target">
                 <i class="fa-solid fa-download text-xs"></i>
                 <span>Baixar</span>
               </a>
-            </td>
+            </div>
           `;
         }
 
-        filesTableBody.appendChild(tr);
+        fileListContainer.appendChild(card);
       });
     }
 
@@ -616,6 +606,7 @@
         filterInput.value = '';
         renderBreadcrumbs();
         renderFolder(currentFolderNode);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       }
     };
 
@@ -668,7 +659,7 @@
 
         activePlyr = new Plyr('#playerTarget', {
           controls: [
-            'play-large', 'play', 'progress', 'current-time', 'duration',
+            'play-large', 'play', 'progress', 'current-time', 'duration', 
             'mute', 'volume', 'captions', 'settings', 'pip', 'fullscreen'
           ],
           speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 2] }
@@ -699,5 +690,4 @@
     });
   </script>
 </body>
-
 </html>
