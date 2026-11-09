@@ -576,15 +576,34 @@
     let renderedItemsLimit = 40; // Renderiza os primeiros 40 arquivos para carga instantânea
     let currentFolderChildren = [];
 
-    // Scroll infinito para carregar mais itens suavemente sem travar o celular
+    const scrollToTopBtn = document.getElementById('scrollToTopBtn');
+
+    // Scroll infinito para carregar mais itens suavemente sem travar o celular & controle do botão Voltar ao Topo
     window.addEventListener('scroll', () => {
-      if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 500) {
+      const scrollY = window.scrollY || document.documentElement.scrollTop;
+
+      // Exibe o botão de voltar ao topo quando rolar mais de 400px
+      if (scrollToTopBtn) {
+        if (scrollY > 400) {
+          scrollToTopBtn.classList.remove('hidden');
+        } else {
+          scrollToTopBtn.classList.add('hidden');
+        }
+      }
+
+      if ((window.innerHeight + scrollY) >= document.body.offsetHeight - 500) {
         if (renderedItemsLimit < currentFolderChildren.length) {
           renderedItemsLimit += 40;
           appendMoreItems();
         }
       }
     }, { passive: true });
+
+    if (scrollToTopBtn) {
+      scrollToTopBtn.addEventListener('click', () => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    }
 
     function appendMoreItems() {
       const slice = currentFolderChildren.slice(renderedItemsLimit - 40, renderedItemsLimit);
