@@ -210,13 +210,21 @@ function createMegaFileInstance(url) {
 }
 
 /**
- * Executa download seguro com retentativas inteligentes
+ * Executa download com opções otimizadas de alta velocidade e vazão de dados
  * @param {any} file 
  * @param {object} [options] 
  * @param {Function} [cb] 
  */
 function safeDownload(file, options = {}, cb) {
-  return file.download(options, cb);
+  // Ajustes de throughput: blocos de até 2MB e 6 conexões paralelas para máxima velocidade da rede
+  const speedOpts = {
+    maxConnections: 6,
+    initialChunkSize: 256 * 1024,
+    chunkSizeIncrement: 256 * 1024,
+    maxChunkSize: 2 * 1024 * 1024,
+    ...options
+  };
+  return file.download(speedOpts, cb);
 }
 
 /**
