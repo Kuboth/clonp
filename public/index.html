@@ -814,6 +814,52 @@
     const videoThumbQueue = [];
     let isProcessingVideoThumb = false;
     const videoThumbCache = new Map(); // Camada 1: RAM (LRU)
+    const imgThumbCache = new Map();   // Cache de imagens em RAM
+
+    // Carregador com cache em IndexedDB para imagens
+    async function loadCachedImage(imgElement, streamUrl, fileId) {
+      if (!fileId) {
+        imgElement.src = streamUrl;
+        return;
+      }
+
+      // 1. Memória RAM
+      if (imgThumbCache.has(fileId)) {
+        imgElement.src = imgThumbCache.get(fileId);
+        return;
+      }
+
+      // 2. IndexedDB (Persistente no navegador)
+      try {
+        if (window.idbKeyval) {
+          const cachedBlob = await idbKeyval.get(`img_${fileId}`);
+          if (cachedBlob) {
+            const objectUrl = URL.createObjectURL(cachedBlob);
+            imgThumbCache.set(fileId, objectUrl);
+            imgElement.src = objectUrl;
+            return;
+          }
+        }
+      } catch (e) {}
+
+      // 3. Busca da rede e salva no IndexedDB
+      try {
+        const resp = await fetch(streamUrl);
+        if (resp.ok) {
+          const blob = await resp.blob();
+          const objectUrl = URL.createObjectURL(blob);
+          imgThumbCache.set(fileId, objectUrl);
+          imgElement.src = objectUrl;
+          if (window.idbKeyval && blob.size < 5 * 1024 * 1024) { // salva se for menor que 5MB
+            idbKeyval.set(`img_${fileId}`, blob).catch(() => {});
+          }
+        } else {
+          imgElement.src = streamUrl;
+        }
+      } catch (err) {
+        imgElement.src = streamUrl;
+      }
+    }
 
     const videoThumbObserver = new IntersectionObserver((entries, observer) => {
       entries.forEach(async (entry) => {
@@ -1112,7 +1158,7 @@
           if (isImg) {
             thumbnailHtml = `
               <div class="w-full h-28 rounded-lg overflow-hidden bg-zinc-950 border border-zinc-800/90 flex items-center justify-center mb-2 relative group-hover:border-zinc-700 transition">
-                <img src="${fullStreamUrl}" alt="${item.name}" loading="lazy" decoding="async" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='<div class=\\'flex flex-col items-center justify-center text-zinc-500 text-[10px]\\'><i class=\\'fa-solid fa-image text-xl mb-1 text-zinc-600\\'></i><span>IMG</span></div>'">
+                <img data-img-stream="${fullStreamUrl}" data-file-id="${item.id}" alt="${item.name}" loading="lazy" decoding="async" class="cached-img-target w-full h-full object-cover" onerror="this.parentElement.innerHTML='<div class=\\'flex flex-col items-center justify-center text-zinc-500 text-[10px]\\'><i class=\\'fa-solid fa-image text-xl mb-1 text-zinc-600\\'></i><span>IMG</span></div>'">
                 <div class="absolute bottom-1 right-1 bg-black/70 backdrop-blur-sm px-1 py-0.5 rounded text-[9px] text-zinc-300 font-mono leading-none">
                   IMG
                 </div>
@@ -1201,7 +1247,7 @@
 
           const previewIconOrThumb = isImg 
             ? `<div class="w-7 h-7 rounded-md overflow-hidden bg-zinc-950 border border-zinc-800 flex-shrink-0">
-                 <img src="${fullStreamUrl}" alt="${item.name}" loading="lazy" decoding="async" class="w-full h-full object-cover">
+                 <img data-img-stream="${fullStreamUrl}" data-file-id="${item.id}" alt="${item.name}" loading="lazy" decoding="async" class="cached-img-target w-full h-full object-cover">
                </div>`
             : `<div class="w-7 h-7 rounded-md bg-zinc-900 border border-zinc-800 flex items-center justify-center flex-shrink-0">
                  <i class="fa-solid ${iconClass} text-xs"></i>
@@ -1243,6 +1289,11 @@
       const videoThumbTarget = card.querySelector('.video-thumb-container');
       if (videoThumbTarget) {
         videoThumbObserver.observe(videoThumbTarget);
+      }
+
+      const imgThumbTarget = card.querySelector('.cached-img-target');
+      if (imgThumbTarget) {
+        loadCachedImage(imgThumbTarget, imgThumbTarget.dataset.imgStream, imgThumbTarget.dataset.fileId);
       }
 
       return card;
