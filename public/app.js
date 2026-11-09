@@ -51,6 +51,8 @@
     let currentSortBy = 'name';
     let isAscending = true;
     let currentViewMode = localStorage.getItem('clonp_view_mode') || 'list';
+    let lastScrollPosition = 0; // Armazena a posição exata da rolagem antes de abrir arquivos
+    let lastOpenedItemId = null; // ID do último item aberto para scroll preciso
 
     // Gerenciador de Seleção em Lote
     let isSelectionMode = false;
@@ -647,6 +649,7 @@
 
     function createItemCard(item) {
       const card = document.createElement('div');
+      card.id = `item-card-${item.id}`;
       const iconClass = getFileIcon(item.name);
       const canView = isViewable(item.name);
       const isImg = isImage(item.name);
@@ -902,6 +905,10 @@
     };
 
     window.openPlayer = (id, encodedName, subtitleId) => {
+      // Salva a posição exata da rolagem antes de abrir o modal
+      lastScrollPosition = window.scrollY || document.documentElement.scrollTop || 0;
+      lastOpenedItemId = id;
+
       if (activePlyr) {
         activePlyr.destroy();
         activePlyr = null;
@@ -1102,6 +1109,34 @@
       }
       mediaPlayerWrapper.innerHTML = '';
       mediaModal.classList.add('hidden');
+
+      // Garante que o card do item aberto esteja renderizado mesmo que tenha navegado na galeria
+      if (currentGalleryIndex >= 0 && viewableItemsList[currentGalleryIndex]) {
+        lastOpenedItemId = viewableItemsList[currentGalleryIndex].id;
+      }
+
+      if (lastOpenedItemId) {
+        const itemIdx = currentFolderChildren.findIndex(it => it.id === lastOpenedItemId);
+        if (itemIdx >= renderedItemsLimit) {
+          // Carrega lotes adicionais se o usuário navegou além dos 40 itens na galeria
+          while (renderedItemsLimit <= itemIdx && renderedItemsLimit < currentFolderChildren.length) {
+            renderedItemsLimit += 40;
+            appendMoreItems();
+          }
+        }
+      }
+
+      // Restaura a rolagem exatamente onde o usuário estava
+      requestAnimationFrame(() => {
+        if (lastOpenedItemId) {
+          const el = document.getElementById(`item-card-${lastOpenedItemId}`);
+          if (el) {
+            el.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+            return;
+          }
+        }
+        window.scrollTo({ top: lastScrollPosition, behavior: 'auto' });
+      });
     }
 
     closeModalBtn.addEventListener('click', closePlayer);
