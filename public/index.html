@@ -304,7 +304,7 @@
       } else {
         listBtn.className = 'w-8 h-8 rounded-lg flex items-center justify-center text-xs transition bg-slate-800 text-brand shadow-sm';
         gridBtn.className = 'w-8 h-8 rounded-lg flex items-center justify-center text-xs transition text-slate-400 hover:text-white';
-        fileListContainer.className = 'space-y-2';
+        fileListContainer.className = 'flex flex-col divide-y divide-slate-800/80 bg-darkcard border border-slate-800 rounded-2xl overflow-hidden shadow-md';
       }
 
       if (currentFolderNode) {
@@ -460,6 +460,7 @@
         currentFolderNode = rootNode;
         pathStack = [{ name: data.name || 'Início', node: rootNode }];
 
+        setViewMode(currentViewMode);
         renderBreadcrumbs();
         renderFolder(currentFolderNode);
         resultsBox.classList.remove('hidden');
@@ -649,27 +650,24 @@
           }
 
         } else {
-          // ================= MODO LISTA =================
-          card.className = 'bg-darkcard border border-slate-800/80 rounded-xl p-3 flex flex-col space-y-2.5 transition active:border-slate-700 cursor-pointer';
+          // ================= MODO LISTA COMPACTA (Estilo MEGA / Explorer) =================
+          card.className = 'p-3 flex items-center justify-between gap-3 hover:bg-slate-800/40 active:bg-slate-800/70 transition cursor-pointer select-none';
 
           if (item.isDirectory) {
             card.onclick = () => enterFolder(item.id);
             card.innerHTML = `
-              <div class="flex items-center justify-between">
-                <div class="flex items-center space-x-3 min-w-0 flex-1">
-                  <div class="w-9 h-9 rounded-xl bg-brand/10 border border-brand/20 flex items-center justify-center text-brand flex-shrink-0">
-                    <i class="fa-solid fa-folder text-base"></i>
-                  </div>
-                  <div class="min-w-0 flex-1">
-                    <div class="font-semibold text-sm text-slate-100 truncate">${item.name}</div>
-                    <div class="text-[11px] text-slate-500">${item.children ? item.children.length + ' item(ns)' : 'Pasta'}</div>
-                  </div>
+              <div class="flex items-center space-x-3 min-w-0 flex-1">
+                <div class="w-8 h-8 rounded-lg bg-brand/10 text-brand flex items-center justify-center flex-shrink-0">
+                  <i class="fa-solid fa-folder text-base"></i>
                 </div>
-                <i class="fa-solid fa-chevron-right text-xs text-slate-600 pl-2"></i>
+                <div class="min-w-0 flex-1">
+                  <div class="font-medium text-xs sm:text-sm text-slate-100 truncate">${item.name}</div>
+                  <div class="text-[10px] text-slate-500">${item.children ? item.children.length + ' item(ns)' : 'Pasta'}</div>
+                </div>
               </div>
+              <i class="fa-solid fa-chevron-right text-xs text-slate-600 pl-2"></i>
             `;
           } else {
-            // Clicar no corpo do card abre o arquivo direto
             card.onclick = () => {
               if (canView) {
                 openPlayer(item.id, encodeURIComponent(item.name), item.subtitleId || '');
@@ -679,36 +677,35 @@
             };
 
             const previewIconOrThumb = isImg 
-              ? `<div class="w-10 h-10 rounded-xl overflow-hidden bg-slate-900 border border-slate-800 flex-shrink-0">
+              ? `<div class="w-8 h-8 rounded-lg overflow-hidden bg-slate-900 border border-slate-800 flex-shrink-0">
                    <img src="${fullStreamUrl}" alt="${item.name}" loading="lazy" class="w-full h-full object-cover">
                  </div>`
-              : `<div class="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center flex-shrink-0 mt-0.5">
-                   <i class="fa-solid ${iconClass} text-sm"></i>
+              : `<div class="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center flex-shrink-0">
+                   <i class="fa-solid ${iconClass} text-xs"></i>
                  </div>`;
 
             card.innerHTML = `
-              <div class="flex items-center justify-between gap-3">
-                <div class="flex items-start space-x-3 min-w-0 flex-1">
-                  ${previewIconOrThumb}
-                  <div class="min-w-0 flex-1">
-                    <div class="font-medium text-xs sm:text-sm text-slate-200 break-words leading-tight">${item.name}</div>
-                    <div class="flex items-center space-x-2 mt-1 text-[11px] text-slate-400 font-mono">
-                      <span>${item.formattedSize}</span>
-                      ${item.subtitleId ? '<span class="text-[9px] bg-yellow-500/20 text-yellow-400 px-1 py-0.5 rounded font-sans">Legenda</span>' : ''}
-                    </div>
+              <div class="flex items-center space-x-3 min-w-0 flex-1">
+                ${previewIconOrThumb}
+                <div class="min-w-0 flex-1">
+                  <div class="font-medium text-xs sm:text-sm text-slate-200 truncate leading-tight">${item.name}</div>
+                  <div class="flex items-center space-x-2 text-[10px] text-slate-400 font-mono mt-0.5">
+                    <span>${item.formattedSize}</span>
+                    <span class="text-slate-600">•</span>
+                    <span>${item.formattedDate ? item.formattedDate.split(' ')[0] : ''}</span>
+                    ${item.subtitleId ? '<span class="text-[9px] bg-yellow-500/20 text-yellow-400 px-1 py-0.5 rounded font-sans">Legenda</span>' : ''}
                   </div>
                 </div>
+              </div>
 
-                <!-- Botão de Baixar Rápido -->
-                <div onclick="event.stopPropagation()">
-                  <a 
-                    href="/api/stream/${item.id}?download=1" 
-                    download 
-                    class="px-3 py-2 bg-slate-800 active:bg-slate-750 text-slate-300 hover:text-white border border-slate-700/70 rounded-xl text-xs font-medium transition inline-flex items-center space-x-1.5 touch-target">
-                    <i class="fa-solid fa-download text-xs"></i>
-                    <span class="hidden sm:inline">Baixar</span>
-                  </a>
-                </div>
+              <!-- Botão de Baixar Rápido -->
+              <div onclick="event.stopPropagation()">
+                <a 
+                  href="/api/stream/${item.id}?download=1" 
+                  download 
+                  class="p-2 bg-slate-800/80 active:bg-slate-750 text-slate-400 hover:text-white rounded-lg text-xs font-medium transition inline-flex items-center justify-center">
+                  <i class="fa-solid fa-download text-xs"></i>
+                </a>
               </div>
             `;
           }
