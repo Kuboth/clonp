@@ -1112,12 +1112,20 @@
 
         const preferredSpeed = parseFloat(localStorage.getItem('clonp_preferred_speed') || '1');
 
+        const isMobileDevice = window.innerWidth <= 640;
+        const playerControls = isMobileDevice
+          ? [
+              'play-large', 'play', 'progress', 'current-time', 'duration', 
+              'captions', 'settings', 'pip', 'fullscreen'
+            ]
+          : [
+              'play-large', 'play', 'progress', 'current-time', 'duration', 
+              'mute', 'volume', 'captions', 'settings', 'pip', 'fullscreen'
+            ];
+
         activePlyr = new Plyr('#playerTarget', {
           autoplay: true,
-          controls: [
-            'play-large', 'play', 'progress', 'current-time', 'duration', 
-            'mute', 'volume', 'captions', 'settings', 'pip', 'fullscreen'
-          ],
+          controls: playerControls,
           seekTime: 10,
           speed: { selected: preferredSpeed, options: [0.5, 0.75, 1, 1.25, 1.5, 2] }
         });
