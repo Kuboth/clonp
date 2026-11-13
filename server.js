@@ -128,37 +128,86 @@ let proxyPointer = 0;
 const cooldownProxies = new Map();
 
 /**
- * Carrega a lista de proxies estruturados a partir da variável de ambiente CUSTOM_PROXIES
- * Formatos suportados:
- * - host:port
- * - user:pass@host:port
- * - http://user:pass@host:port
- * - Separados por vírgula, ponto-e-vírgula ou quebra de linha
+ * Busca proxies públicos de listas de alta disponibilidade caso CUSTOM_PROXIES não esteja configurado
  */
-function loadProxyPool() {
+async function fetchPublicProxies() {
+  const sources = [
+    'https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/http.txt',
+    'https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt'
+  ];
+
+  for (const src of sources) {
+    try {
+      const data = await new Promise((resolve) => {
+        const req = https.get(src, { timeout: 8000 }, (res) => {
+          if (res.statusCode !== 200) return resolve('');
+          let body = '';
+          res.on('data', chunk => body += chunk);
+          res.on('end', () => resolve(body));
+        });
+        req.on('error', () => resolve(''));
+        req.on('timeout', () => { req.destroy(); resolve(''); });
+      });
+
+      if (data && data.length > 50) {
+        const lines = data.split('\n')
+          .map(l => l.trim())
+          .filter(l => l && /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$/.test(l))
+          .map(l => `http://${l}`);
+
+        if (lines.length > 0) {
+          // Embaralhar para distribuir entre as instâncias
+          lines.sort(() => Math.random() - 0.5);
+          console.log(`[SmartProxy] Carregados ${lines.length} proxies públicos de fallback (${src}).`);
+          return lines;
+        }
+      }
+    } catch (e) {
+      console.warn('[SmartProxy] Falha ao consultar lista de proxies públicos:', e.message);
+    }
+  }
+  return [];
+}
+
+/**
+ * Carrega a lista de proxies estruturados a partir da variável de ambiente CUSTOM_PROXIES
+ * e complementa com proxies públicos sob demanda.
+ */
+async function loadProxyPool() {
   const rawList = process.env.CUSTOM_PROXIES || '';
-  if (!rawList) {
-    proxyPool = [];
-    return proxyPool;
+  let collected = [];
+
+  if (rawList) {
+    collected = rawList
+      .split(/[,;\n]/)
+      .map(p => p.trim())
+      .filter(Boolean)
+      .map(p => {
+        if (!p.startsWith('http://') && !p.startsWith('https://') && !p.startsWith('socks5://')) {
+          return `http://${p}`;
+        }
+        return p;
+      });
   }
 
-  const collected = rawList
-    .split(/[,;\n]/)
-    .map(p => p.trim())
-    .filter(Boolean)
-    .map(p => {
-      if (!p.startsWith('http://') && !p.startsWith('https://') && !p.startsWith('socks5://')) {
-        return `http://${p}`;
-      }
-      return p;
-    });
+  // Se não houver proxies customizados fornecidos, carrega pool público
+  if (collected.length === 0) {
+    const publicProxies = await fetchPublicProxies();
+    collected.push(...publicProxies);
+  }
 
   proxyPool = Array.from(new Set(collected));
-  console.log(`[SmartProxy] Pool inicializado com ${proxyPool.length} proxy(ies) de alta velocidade.`);
+  console.log(`[SmartProxy] Pool ativo com ${proxyPool.length} proxy(ies) disponíveis.`);
   return proxyPool;
 }
 
+// Inicializa pool e atualiza a cada 30 minutos
 loadProxyPool();
+setInterval(() => {
+  if (!process.env.CUSTOM_PROXIES) {
+    loadProxyPool();
+  }
+}, 30 * 60 * 1000);
 
 /**
  * Retorna o próximo proxy disponível que não esteja em período de cooldown
@@ -261,12 +310,54 @@ function resolveStatelessFile(token) {
   return null;
 }
 function safeDownload(file, options = {}, cb) {
-  // Configuração Ultra Inteligente: 6 conexões concorrentes, partida ágil em 256KB escalando dinamicamente até 3MB
+  let activeProxy = null;
+
+  // Failover inteligente estilo MegaBasterd / SmartProxy
+  const smartHandleRetries = (tries, error, retryCb) => {
+    const errMsg = (error && error.message) ? error.message : String(error);
+    const isBandwidthLimit = errMsg.includes('509') ||
+      errMsg.includes('Bandwidth limit') ||
+      errMsg.includes('rate limit') ||
+      errMsg.includes('quota') ||
+      errMsg.includes('RESOURCE_LIMIT');
+
+    console.warn(`[SmartProxy Retry] Tentativa ${tries} - Erro detectado: ${errMsg}`);
+
+    if (isBandwidthLimit) {
+      if (activeProxy) {
+        markProxyCooldown(activeProxy, 3600); // 1 hora de cooldown para o proxy esgotado
+      }
+
+      // Rotaciona para o próximo proxy limpo do pool
+      const nextProxy = getNextAvailableProxy();
+      if (nextProxy && file && file.api) {
+        activeProxy = nextProxy;
+        const newAgent = createAgent(activeProxy);
+        if (newAgent) {
+          file.api.httpAgent = newAgent;
+          file.api.httpsAgent = newAgent;
+          console.log(`[SmartProxy Failover] Cota/509 detectado! Conexão alternada para proxy: ${activeProxy.replace(/:[^:@]+@/, ':***@')}`);
+          return setTimeout(retryCb, 500);
+        }
+      }
+    }
+
+    // Se atingir 8 tentativas sem sucesso, encerra com o erro original
+    if (tries > 8) {
+      return retryCb(error);
+    }
+
+    const backoff = Math.min(1000 * Math.pow(1.5, tries), 8000);
+    setTimeout(retryCb, backoff);
+  };
+
+  // Configuração inteligente: 4 conexões concorrentes, partida ágil e retries automáticos com SmartProxy
   const speedOpts = {
-    maxConnections: 6,
+    maxConnections: 4,
     initialChunkSize: 256 * 1024,
     chunkSizeIncrement: 512 * 1024,
-    maxChunkSize: 3 * 1024 * 1024,
+    maxChunkSize: 2 * 1024 * 1024,
+    handleRetries: smartHandleRetries,
     ...options
   };
 
