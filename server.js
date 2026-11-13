@@ -128,14 +128,15 @@ let proxyPointer = 0;
 const cooldownProxies = new Map();
 
 /**
- * Busca proxies públicos de listas de alta disponibilidade caso CUSTOM_PROXIES não esteja configurado
+ * Busca e valida proxies públicos rápidos e funcionais para o MEGA
  */
-async function fetchPublicProxies() {
+async function fetchAndVerifyProxies() {
   const sources = [
     'https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/http.txt',
     'https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt'
   ];
 
+  let rawIps = [];
   for (const src of sources) {
     try {
       const data = await new Promise((resolve) => {
@@ -152,21 +153,42 @@ async function fetchPublicProxies() {
       if (data && data.length > 50) {
         const lines = data.split('\n')
           .map(l => l.trim())
-          .filter(l => l && /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$/.test(l))
-          .map(l => `http://${l}`);
-
-        if (lines.length > 0) {
-          // Embaralhar para distribuir entre as instâncias
-          lines.sort(() => Math.random() - 0.5);
-          console.log(`[SmartProxy] Carregados ${lines.length} proxies públicos de fallback (${src}).`);
-          return lines;
-        }
+          .filter(l => l && /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$/.test(l));
+        rawIps.push(...lines);
       }
-    } catch (e) {
-      console.warn('[SmartProxy] Falha ao consultar lista de proxies públicos:', e.message);
-    }
+    } catch (e) {}
   }
-  return [];
+
+  const unique = Array.from(new Set(rawIps)).sort(() => Math.random() - 0.5).slice(0, 40);
+  if (unique.length === 0) return [];
+
+  // Validação ultra-rápida (2.5s) testando handshake com a API do MEGA
+  const verified = await Promise.all(unique.map(async (ipPort) => {
+    try {
+      const agent = new HttpsProxyAgent(`http://${ipPort}`);
+      const f = File.fromURL('https://mega.nz/file/qsQDWaKY#z8fBh50uxSn4oM0HkpMSKg');
+      f.api.httpAgent = agent;
+      f.api.httpsAgent = agent;
+
+      return await new Promise((resolve) => {
+        const timer = setTimeout(() => resolve(null), 2500);
+        f.api.fetch('https://g.api.mega.co.nz/cs').then(r => {
+          clearTimeout(timer);
+          if (r.status === 200 || r.status === 400) resolve(`http://${ipPort}`);
+          else resolve(null);
+        }).catch(() => {
+          clearTimeout(timer);
+          resolve(null);
+        });
+      });
+    } catch (e) {
+      return null;
+    }
+  }));
+
+  const active = verified.filter(Boolean);
+  console.log(`[SmartProxy] ${active.length} proxies verificados e prontos para furar cota do MEGA.`);
+  return active;
 }
 
 /**
@@ -190,14 +212,14 @@ async function loadProxyPool() {
       });
   }
 
-  // Se não houver proxies customizados fornecidos, carrega pool público
+  // Se não houver proxies customizados fornecidos, carrega e valida pool público
   if (collected.length === 0) {
-    const publicProxies = await fetchPublicProxies();
-    collected.push(...publicProxies);
+    const verifiedProxies = await fetchAndVerifyProxies();
+    collected.push(...verifiedProxies);
   }
 
   proxyPool = Array.from(new Set(collected));
-  console.log(`[SmartProxy] Pool ativo com ${proxyPool.length} proxy(ies) disponíveis.`);
+  console.log(`[SmartProxy] Pool ativo com ${proxyPool.length} proxy(ies) funcionais.`);
   return proxyPool;
 }
 
@@ -334,11 +356,11 @@ function safeDownload(file, options = {}, cb) {
         throw fetchErr;
       }
 
-      // Se o status retornado for 509 (cota de banda esgotada no IP)
-      if (res && res.status === 509) {
-        console.warn(`[SmartProxy Failover] 509 Detectado na URL ${url.substring(0, 40)}...! Rotacionando proxy do pool...`);
-        // Tenta até 5 proxies do pool
-        for (let attempt = 0; attempt < 5; attempt++) {
+      // Se o status retornado for 509 ou qualquer código de cota/erro de servidor
+      if (res && (res.status === 509 || res.status === 429)) {
+        console.warn(`[SmartProxy Failover] Status ${res.status} detectado na URL ${url.substring(0, 50)}...! Rotacionando proxy do pool...`);
+        // Tenta proxies do pool verificado
+        for (let attempt = 0; attempt < 8; attempt++) {
           const nextProxy = getNextAvailableProxy();
           if (!nextProxy) break;
           const agent = createAgent(nextProxy);
@@ -348,9 +370,9 @@ function safeDownload(file, options = {}, cb) {
             const proxyOpts = { ...(opts || {}), agent: () => agent };
             const proxyRes = await origFetch.call(this, url, proxyOpts);
             if (proxyRes && proxyRes.status === 200) {
-              console.log(`[SmartProxy Bypass SUCESSO] Chunk recuperado com sucesso via proxy ${nextProxy}!`);
+              console.log(`[SmartProxy Bypass SUCESSO] Resposta 200 OK obtida via proxy ${nextProxy}!`);
               return proxyRes;
-            } else if (proxyRes && proxyRes.status === 509) {
+            } else if (proxyRes && (proxyRes.status === 509 || proxyRes.status === 429)) {
               markProxyCooldown(nextProxy, 3600);
             }
           } catch (proxyErr) {
