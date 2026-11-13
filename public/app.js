@@ -881,6 +881,11 @@
         videoThumbObserver.observe(videoThumbTarget);
       }
 
+      const lazyImgTarget = card.querySelector('.lazy-image-target');
+      if (lazyImgTarget) {
+        imageLazyObserver.observe(lazyImgTarget);
+      }
+
       return card;
     }
 
@@ -963,10 +968,176 @@
 
     let modalHistoryPushed = false;
 
-    window.openPlayer = (id, encodedName, subtitleId) => {
-      // Abre diretamente no reprodutor/visualizador nativo do navegador em nova aba
+        window.openPlayer = (id, encodedName, subtitleId) => {
+      // Salva a posição exata da rolagem antes de abrir o modal
+      lastScrollPosition = window.scrollY || document.documentElement.scrollTop || 0;
       lastOpenedItemId = id;
-      window.open('/api/stream/' + id, '_blank');
+
+      if (!modalHistoryPushed) {
+        history.pushState({ modalOpen: true }, '', '#preview');
+        modalHistoryPushed = true;
+      }
+
+      if (activePlyr) {
+        activePlyr.destroy();
+        activePlyr = null;
+      }
+
+      const name = decodeURIComponent(encodedName);
+      modalTitle.textContent = name;
+      const ext = name.split('.').pop().toLowerCase();
+      currentStreamUrl = `${window.location.origin}/api/stream/${id}`;
+
+      // Localiza índice na galeria
+      const foundIdx = viewableItemsList.findIndex(it => it.id === id);
+      if (foundIdx !== -1) {
+        currentGalleryIndex = foundIdx;
+        galleryCounter.textContent = `${currentGalleryIndex + 1} / ${viewableItemsList.length}`;
+      }
+
+      const modalDownloadBtn = document.getElementById('modalDownloadBtn');
+      if (modalDownloadBtn) {
+        modalDownloadBtn.onclick = (e) => {
+          e.preventDefault();
+          triggerDownload(id);
+        };
+      }
+
+      mediaPlayerWrapper.innerHTML = '';
+
+      if (isImage(name)) {
+        mediaPlayerWrapper.innerHTML = `
+          <div class="w-full h-full min-h-[300px] flex items-center justify-center p-2 bg-black overflow-hidden select-none relative">
+            <div id="imageLoadingSpinner" class="absolute flex flex-col items-center justify-center text-zinc-400">
+              <i class="fa-solid fa-circle-notch fa-spin text-2xl text-brand mb-2"></i>
+              <span class="text-xs">Carregando imagem...</span>
+            </div>
+            <img src="${currentStreamUrl}" alt="${name}" 
+              onload="document.getElementById('imageLoadingSpinner')?.remove()" 
+              onerror="
+                this.style.display='none';
+                const spin = document.getElementById('imageLoadingSpinner');
+                if (spin) spin.innerHTML = '<div class=\\'text-center p-4\\'><i class=\\'fa-solid fa-triangle-exclamation text-amber-500 text-3xl mb-2\\'></i><p class=\\'text-sm font-semibold text-zinc-200\\'>Limite de transferência atingido</p><p class=\\'text-xs text-zinc-400 mt-1 max-w-sm\\'>A cota temporária do MEGA foi atingida ou o arquivo requer download.</p></div>';
+              "
+              class="max-h-[82vh] max-w-full w-auto h-auto object-contain shadow-2xl transition-transform duration-200">
+          </div>
+        `;
+      } else if (isPdf(name)) {
+        mediaPlayerWrapper.innerHTML = `
+          <div class="w-full h-[82vh] bg-slate-900 rounded-lg overflow-hidden">
+            <iframe src="${currentStreamUrl}" class="w-full h-full border-0"></iframe>
+          </div>
+        `;
+      } else if (['txt', 'log'].includes(ext)) {
+        mediaPlayerWrapper.innerHTML = `<div class="p-4 text-xs text-slate-400">Carregando visualização...</div>`;
+        fetch(currentStreamUrl)
+          .then(r => r.text())
+          .then(text => {
+            mediaPlayerWrapper.innerHTML = `
+              <pre class="w-full h-[80vh] overflow-auto p-4 text-xs font-mono text-slate-200 bg-slate-950 rounded-xl whitespace-pre-wrap">${text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
+            `;
+          })
+          .catch(() => {
+            mediaPlayerWrapper.innerHTML = `<div class="p-4 text-xs text-rose-400">Não foi possível carregar a pré-visualização.</div>`;
+          });
+      } else if (isAudio(name)) {
+        mediaPlayerWrapper.innerHTML = `
+          <div class="p-8 w-full flex flex-col items-center justify-center">
+            <i class="fa-solid fa-compact-disc fa-spin text-6xl text-brand mb-6"></i>
+            <audio id="playerTarget" controls class="w-full max-w-md">
+              <source src="${currentStreamUrl}" type="audio/${ext === 'mp3' ? 'mpeg' : ext}">
+            </audio>
+          </div>
+        `;
+        activePlyr = new Plyr('#playerTarget', {
+          controls: ['play', 'progress', 'current-time', 'duration', 'mute', 'volume']
+        });
+      } else {
+        // Player de Vídeo com Autoplay Imediato e Retomada de Posição
+        const video = document.createElement('video');
+        video.id = 'playerTarget';
+        video.controls = true;
+        video.autoplay = true;
+        video.playsInline = true;
+        video.preload = 'auto';
+        video.className = 'w-full max-h-[82vh] object-contain';
+
+        let tracksHtml = '';
+        if (subtitleId) {
+          tracksHtml = `<track kind="captions" label="Português / Legenda" src="/api/subtitles/${subtitleId}" srclang="pt" default>`;
+        }
+
+        let videoMime = 'video/mp4';
+        if (ext === 'webm') videoMime = 'video/webm';
+        else if (ext === 'mov') videoMime = 'video/quicktime';
+        else if (ext === 'm4v') videoMime = 'video/x-m4v';
+        else if (ext === 'ogv') videoMime = 'video/ogg';
+        else if (ext === 'mkv') videoMime = 'video/x-matroska';
+
+        video.innerHTML = `<source src="${currentStreamUrl}" type="${videoMime}">${tracksHtml}`;
+        mediaPlayerWrapper.appendChild(video);
+
+        const preferredSpeed = parseFloat(localStorage.getItem('clonp_preferred_speed') || '1');
+
+        activePlyr = new Plyr('#playerTarget', {
+          autoplay: true,
+          controls: [
+            'play-large', 'play', 'progress', 'current-time', 'duration', 
+            'mute', 'volume', 'captions', 'settings', 'pip', 'fullscreen'
+          ],
+          seekTime: 10,
+          speed: { selected: preferredSpeed, options: [0.5, 0.75, 1, 1.25, 1.5, 2] }
+        });
+
+        video.addEventListener('error', () => {
+          mediaPlayerWrapper.innerHTML = `
+            <div class="text-center p-6 flex flex-col items-center justify-center">
+              <i class="fa-solid fa-triangle-exclamation text-amber-500 text-4xl mb-3"></i>
+              <p class="text-sm font-semibold text-zinc-200">Não foi possível reproduzir este vídeo</p>
+              <p class="text-xs text-zinc-400 mt-1 max-w-md">O formato pode requerer download direto ou o navegador não suporta este codec de vídeo.</p>
+              <button onclick="triggerDownload('${id}')" class="mt-4 px-4 py-2 bg-brand text-zinc-950 font-medium text-xs rounded-lg hover:bg-brand-hover transition flex items-center space-x-2">
+                <i class="fa-solid fa-download"></i>
+                <span>Baixar Diretamente</span>
+              </button>
+            </div>
+          `;
+        });
+
+        activePlyr.on('ratechange', () => {
+          if (activePlyr.speed) {
+            localStorage.setItem('clonp_preferred_speed', activePlyr.speed);
+          }
+        });
+
+        if (ext === 'm3u8' && Hls.isSupported()) {
+          const hls = new Hls({ maxBufferLength: 30 });
+          hls.loadSource(currentStreamUrl);
+          hls.attachMedia(video);
+        }
+
+        activePlyr.on('canplay', () => {
+          activePlyr.play().catch(() => {});
+        });
+
+        const resumeStorageKey = `clonp_resume_${id}`;
+        const savedTime = localStorage.getItem(resumeStorageKey);
+
+        activePlyr.on('loadedmetadata', () => {
+          if (savedTime && parseFloat(savedTime) > 5) {
+            activePlyr.currentTime = parseFloat(savedTime);
+            showToast(`Retomando aos ${Math.floor(parseFloat(savedTime) / 60)}m${Math.floor(parseFloat(savedTime) % 60)}s`);
+          }
+          activePlyr.play().catch(() => {});
+        });
+
+        activePlyr.on('timeupdate', () => {
+          if (activePlyr.currentTime > 5) {
+            localStorage.setItem(resumeStorageKey, activePlyr.currentTime);
+          }
+        });
+      }
+
+      mediaModal.classList.remove('hidden');
     };
 
     function closePlayer(triggerHistoryBack = true) {
