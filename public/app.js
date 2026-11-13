@@ -909,7 +909,7 @@
       if (targetFolder) {
         pathStack.push({ name: targetFolder.name, node: targetFolder });
         currentFolderNode = targetFolder;
-        history.pushState({ folderId, depth: pathStack.length }, '', `#folder-${pathStack.length}`);
+        history.pushState({ folderId, depth: pathStack.length, path: pathStack.map(p => p.name) }, '', `#folder-${pathStack.length}`);
         renderBreadcrumbs();
         renderFolder(currentFolderNode);
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -917,7 +917,23 @@
     };
 
     window.addEventListener('popstate', (e) => {
-      goBackFolder();
+      if (!mediaModal.classList.contains('hidden')) {
+        // Se o player estava aberto, fecha o player e NUNCA reseta a pasta
+        closePlayer(false);
+        return;
+      }
+
+      const state = e.state;
+      if (state && typeof state.depth === 'number') {
+        while (pathStack.length > state.depth && pathStack.length > 1) {
+          pathStack.pop();
+        }
+        currentFolderNode = pathStack[pathStack.length - 1].node;
+        renderBreadcrumbs();
+        renderFolder(currentFolderNode);
+      } else {
+        goBackFolder();
+      }
     });
 
     // Touch Swipe: Voltar pasta ou passar galeria
