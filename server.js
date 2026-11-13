@@ -310,6 +310,59 @@ function resolveStatelessFile(token) {
   return null;
 }
 function safeDownload(file, options = {}, cb) {
+  // Conectar SmartProxy diretamente no fetch do API do MEGA para garantir que 509 seja interceptado
+  // e rotacionado sem abortar a stream
+  if (file && file.api && !file.api._smartProxyHooked) {
+    file.api._smartProxyHooked = true;
+    const origFetch = file.api.fetch;
+
+    file.api.fetch = async function(url, opts) {
+      let res;
+      try {
+        res = await origFetch.call(this, url, opts);
+      } catch (fetchErr) {
+        // Se a chamada direta falhar por erro de rede ou quota
+        const nextProxy = getNextAvailableProxy();
+        if (nextProxy) {
+          const agent = createAgent(nextProxy);
+          if (agent) {
+            console.warn(`[SmartProxy Fetch Fallback] Erro na requisição direta, tentando via proxy ${nextProxy}...`);
+            const proxyOpts = { ...(opts || {}), agent: () => agent };
+            return await origFetch.call(this, url, proxyOpts);
+          }
+        }
+        throw fetchErr;
+      }
+
+      // Se o status retornado for 509 (cota de banda esgotada no IP)
+      if (res && res.status === 509) {
+        console.warn(`[SmartProxy Failover] 509 Detectado na URL ${url.substring(0, 40)}...! Rotacionando proxy do pool...`);
+        // Tenta até 5 proxies do pool
+        for (let attempt = 0; attempt < 5; attempt++) {
+          const nextProxy = getNextAvailableProxy();
+          if (!nextProxy) break;
+          const agent = createAgent(nextProxy);
+          if (!agent) continue;
+
+          try {
+            const proxyOpts = { ...(opts || {}), agent: () => agent };
+            const proxyRes = await origFetch.call(this, url, proxyOpts);
+            if (proxyRes && proxyRes.status === 200) {
+              console.log(`[SmartProxy Bypass SUCESSO] Chunk recuperado com sucesso via proxy ${nextProxy}!`);
+              return proxyRes;
+            } else if (proxyRes && proxyRes.status === 509) {
+              markProxyCooldown(nextProxy, 3600);
+            }
+          } catch (proxyErr) {
+            markProxyCooldown(nextProxy, 1800);
+          }
+        }
+      }
+
+      return res;
+    };
+  }
+
   let activeProxy = null;
 
   // Failover inteligente estilo MegaBasterd / SmartProxy
@@ -325,10 +378,9 @@ function safeDownload(file, options = {}, cb) {
 
     if (isBandwidthLimit) {
       if (activeProxy) {
-        markProxyCooldown(activeProxy, 3600); // 1 hora de cooldown para o proxy esgotado
+        markProxyCooldown(activeProxy, 3600);
       }
 
-      // Rotaciona para o próximo proxy limpo do pool
       const nextProxy = getNextAvailableProxy();
       if (nextProxy && file && file.api) {
         activeProxy = nextProxy;
@@ -336,13 +388,12 @@ function safeDownload(file, options = {}, cb) {
         if (newAgent) {
           file.api.httpAgent = newAgent;
           file.api.httpsAgent = newAgent;
-          console.log(`[SmartProxy Failover] Cota/509 detectado! Conexão alternada para proxy: ${activeProxy.replace(/:[^:@]+@/, ':***@')}`);
+          console.log(`[SmartProxy Failover] Conexão alternada para proxy: ${activeProxy.replace(/:[^:@]+@/, ':***@')}`);
           return setTimeout(retryCb, 500);
         }
       }
     }
 
-    // Se atingir 8 tentativas sem sucesso, encerra com o erro original
     if (tries > 8) {
       return retryCb(error);
     }
@@ -351,7 +402,6 @@ function safeDownload(file, options = {}, cb) {
     setTimeout(retryCb, backoff);
   };
 
-  // Configuração inteligente: 4 conexões concorrentes, partida ágil e retries automáticos com SmartProxy
   const speedOpts = {
     maxConnections: 4,
     initialChunkSize: 256 * 1024,
