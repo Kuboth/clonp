@@ -476,21 +476,13 @@ app.get('/api/stream/:id', streamLimiter, async (req, res) => {
     }
 
     // Para download ou streaming contínuo:
+    res.writeHead(200, headers);
     const downloadStream = safeDownload(file);
 
     req.on('close', () => {
       if (downloadStream && typeof downloadStream.destroy === 'function') {
         downloadStream.destroy();
       }
-    });
-
-    let headersSent = false;
-    downloadStream.once('data', (firstChunk) => {
-      if (!headersSent && !res.headersSent) {
-        headersSent = true;
-        res.writeHead(200, headers);
-      }
-      res.write(firstChunk);
     });
 
     downloadStream.on('error', (err) => {
@@ -502,12 +494,7 @@ app.get('/api/stream/:id', streamLimiter, async (req, res) => {
       }
     });
 
-    downloadStream.on('end', () => {
-      if (!headersSent && !res.headersSent) {
-        res.writeHead(200, headers);
-      }
-      res.end();
-    });
+    downloadStream.pipe(res);
 
   } catch (err) {
     console.error('Erro no stream:', err);
