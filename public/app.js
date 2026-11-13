@@ -448,7 +448,7 @@
         pendingThumbQueue.push({ mediaId, mediaType, targetEl });
         pumpThumbQueue();
       });
-    }, { rootMargin: '180px 0px' });
+    }, { rootMargin: '120px 0px' });
 
     function applyCachedThumbnail(targetEl, cachedData, mediaType) {
       const dataUrl = typeof cachedData === 'object' ? cachedData.thumbUrl : cachedData;
@@ -493,7 +493,7 @@
     // Processamento controlado de miniatura de IMAGEM
     function processImageTask(task) {
       const { mediaId, targetEl } = task;
-      const streamUrl = `${window.location.origin}/api/stream/${mediaId}`;
+      const thumbUrl = `${window.location.origin}/api/thumbnail/${mediaId}`;
 
       const img = new Image();
       img.decoding = 'async';
@@ -506,12 +506,12 @@
       const timeout = setTimeout(() => {
         img.src = '';
         done();
-      }, 9000);
+      }, 10000);
 
       img.onload = () => {
         clearTimeout(timeout);
         try {
-          // Compacta a imagem em miniatura leve (WebP/JPEG de 12KB) para salvar no IndexedDB
+          // Compacta a imagem em miniatura leve (JPEG de 12KB) para salvar no IndexedDB
           const canvas = document.createElement('canvas');
           const maxDim = 280;
           let w = img.naturalWidth || 200;
@@ -527,16 +527,17 @@
           canvas.height = h;
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, w, h);
-          const thumbUrl = canvas.toDataURL('image/jpeg', 0.70);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.70);
 
-          thumbMemoryCache.set(mediaId, thumbUrl);
+          thumbMemoryCache.set(mediaId, dataUrl);
           if (window.idbKeyval) {
-            idbKeyval.set(`thumb_${mediaId}`, thumbUrl).catch(() => {});
+            idbKeyval.set(`thumb_${mediaId}`, dataUrl).catch(() => {});
           }
 
-          applyCachedThumbnail(targetEl, thumbUrl, 'image');
+          applyCachedThumbnail(targetEl, dataUrl, 'image');
         } catch (e) {
-          applyCachedThumbnail(targetEl, streamUrl, 'image');
+          thumbMemoryCache.set(mediaId, thumbUrl);
+          applyCachedThumbnail(targetEl, thumbUrl, 'image');
         }
         done();
       };
@@ -546,7 +547,7 @@
         done();
       };
 
-      img.src = streamUrl;
+      img.src = thumbUrl;
     }
 
     // Processamento controlado de miniatura de VÍDEO
@@ -557,7 +558,7 @@
       const video = document.createElement('video');
       video.muted = true;
       video.playsInline = true;
-      video.preload = 'auto';
+      video.preload = 'metadata';
 
       let isDone = false;
       const done = () => {
@@ -570,7 +571,7 @@
         setTimeout(pumpThumbQueue, 60);
       };
 
-      const timeout = setTimeout(done, 9000);
+      const timeout = setTimeout(done, 8000);
 
       const captureFrame = () => {
         try {
@@ -702,6 +703,8 @@
     }
 
     function renderFolder(folderNode) {
+      // Limpa a fila pendente da pasta anterior para priorizar imediatamente a pasta aberta
+      pendingThumbQueue.length = 0;
       fileListContainer.innerHTML = '';
       currentFolderChildren = folderNode.children || [];
       currentFolderChildren = sortItems(currentFolderChildren);
