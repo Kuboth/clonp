@@ -715,7 +715,7 @@
       const isSelected = selectedItemIds.has(item.id);
 
       if (currentViewMode === 'grid') {
-        card.className = `bg-zinc-900/60 border ${isSelected ? 'border-zinc-200 ring-1 ring-zinc-200' : 'border-zinc-800/90'} rounded-xl p-2.5 flex flex-col justify-between transition hover:border-zinc-700 active:scale-[0.98] select-none cursor-pointer group shadow-sm relative`;
+        card.className = `file-item-card bg-zinc-900/60 border ${isSelected ? 'border-zinc-200 ring-1 ring-zinc-200' : 'border-zinc-800/90'} rounded-xl p-2.5 flex flex-col justify-between transition hover:border-zinc-700 active:scale-[0.98] select-none cursor-pointer group shadow-sm relative`;
 
         if (item.isDirectory) {
           card.onclick = () => enterFolder(item.id);
@@ -803,7 +803,7 @@
 
       } else {
         // Modo Lista
-        card.className = `p-2.5 flex items-center justify-between gap-3 hover:bg-zinc-850/40 ${isSelected ? 'bg-zinc-800/60' : ''} active:bg-zinc-850/70 transition cursor-pointer select-none`;
+        card.className = `file-item-card p-2.5 flex items-center justify-between gap-3 hover:bg-zinc-850/40 ${isSelected ? 'bg-zinc-800/60' : ''} active:bg-zinc-850/70 transition cursor-pointer select-none`;
 
         if (item.isDirectory) {
           card.onclick = () => enterFolder(item.id);
