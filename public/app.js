@@ -48,8 +48,8 @@
     let activePlyr = null;
     let currentStreamUrl = '';
 
-    let currentSortBy = 'name';
-    let isAscending = true;
+    let currentSortBy = localStorage.getItem('clonp_sort_by') || 'name';
+    let isAscending = localStorage.getItem('clonp_sort_asc') !== 'false';
     let currentViewMode = localStorage.getItem('clonp_view_mode') || 'list';
     let lastScrollPosition = 0; // Armazena a posição exata da rolagem antes de abrir arquivos
     let lastOpenedItemId = null; // ID do último item aberto para scroll preciso
@@ -140,6 +140,23 @@
       duration: 'Duração'
     };
 
+    
+    // Restaura interface da ordenação e direção salvas no localStorage
+    if (sortLabels[currentSortBy]) {
+      currentSortLabel.textContent = sortLabels[currentSortBy];
+    }
+    Object.keys(sortLabels).forEach(key => {
+      const el = document.getElementById('check_' + key);
+      if (el) {
+        if (key === currentSortBy) el.classList.remove('hidden');
+        else el.classList.add('hidden');
+      }
+    });
+    const initialQuickIcon = document.getElementById('quickDirectionIcon');
+    if (initialQuickIcon) {
+      initialQuickIcon.className = isAscending ? 'fa-solid fa-arrow-up-a-z text-xs text-brand' : 'fa-solid fa-arrow-down-z-a text-xs text-brand';
+    }
+
     sortMenuBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       sortDropdown.classList.toggle('hidden');
@@ -153,6 +170,7 @@
 
     window.changeSort = (sortKey) => {
       currentSortBy = sortKey;
+      localStorage.setItem('clonp_sort_by', sortKey);
       currentSortLabel.textContent = sortLabels[sortKey];
 
       Object.keys(sortLabels).forEach(key => {
@@ -171,6 +189,7 @@
 
     window.toggleSortDirection = () => {
       isAscending = !isAscending;
+      localStorage.setItem('clonp_sort_asc', isAscending);
       const quickIcon = document.getElementById('quickDirectionIcon');
       if (quickIcon) {
         quickIcon.className = isAscending ? 'fa-solid fa-arrow-up-a-z text-xs text-brand' : 'fa-solid fa-arrow-down-z-a text-xs text-brand';
