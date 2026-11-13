@@ -105,7 +105,7 @@
         </div>
         <div class="flex items-center space-x-1.5">
           <span class="font-semibold text-sm tracking-tight text-zinc-100">clonp</span>
-          <span id="appVersionBadge" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-400 border border-zinc-800">v2.6</span>
+          <span id="appVersionBadge" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-400 border border-zinc-800">v2.7</span>
         </div>
       </div>
       
@@ -348,9 +348,16 @@
             <span class="p-1 rounded bg-zinc-800 text-zinc-300 text-[10px] font-mono uppercase tracking-wider">Player</span>
             <h3 id="modalTitle" class="font-medium text-xs sm:text-sm text-zinc-200 truncate">Reproduzindo</h3>
           </div>
-          <button id="closeModalBtn" class="text-zinc-400 hover:text-white p-1.5 rounded-lg touch-target flex items-center justify-center bg-zinc-900 border border-zinc-800 active:bg-zinc-800 cursor-pointer">
-            <i class="fa-solid fa-xmark text-lg"></i>
-          </button>
+          <div class="flex items-center space-x-1.5">
+            <!-- Botão de Download Rápido no Topo -->
+            <button id="modalQuickDownloadBtn" title="Download Rápido" class="px-2.5 py-1.5 rounded-lg bg-zinc-850 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-200 border border-zinc-750 text-xs font-medium flex items-center space-x-1 cursor-pointer transition">
+              <i class="fa-solid fa-download text-[11px] text-brand"></i>
+              <span class="hidden sm:inline">Baixar</span>
+            </button>
+            <button id="closeModalBtn" class="text-zinc-400 hover:text-white p-1.5 rounded-lg touch-target flex items-center justify-center bg-zinc-900 border border-zinc-800 active:bg-zinc-800 cursor-pointer">
+              <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+          </div>
         </div>
         
         <!-- Área Central de Exibição Expandida -->

@@ -1011,31 +1011,44 @@
         galleryCounter.textContent = `${currentGalleryIndex + 1} / ${viewableItemsList.length}`;
       }
 
-      const modalDownloadBtn = document.getElementById('modalDownloadBtn');
-      if (modalDownloadBtn) {
-        modalDownloadBtn.onclick = (e) => {
-          e.preventDefault();
-          triggerDownload(id);
-        };
-      }
+      // Download Rápido Direto no Modal (tanto no topo quanto no rodapé)
+      const setupDownloadBtn = (btnId) => {
+        const btn = document.getElementById(btnId);
+        if (btn) {
+          btn.onclick = (e) => {
+            e.preventDefault();
+            triggerDownload(id);
+          };
+        }
+      };
+      setupDownloadBtn('modalDownloadBtn');
+      setupDownloadBtn('modalQuickDownloadBtn');
 
       mediaPlayerWrapper.innerHTML = '';
 
       if (isImage(name)) {
+        // Pré-carregamento (Preload) da próxima e anterior imagem
+        preloadNeighborImages(currentGalleryIndex);
+
         mediaPlayerWrapper.innerHTML = `
-          <div class="w-full h-full min-h-[300px] flex items-center justify-center p-2 bg-black overflow-hidden select-none relative">
+          <div id="imageZoomContainer" class="w-full h-full min-h-[300px] flex items-center justify-center p-2 bg-black overflow-hidden select-none relative cursor-zoom-in">
             <div id="imageLoadingSpinner" class="absolute flex flex-col items-center justify-center text-zinc-400">
               <i class="fa-solid fa-circle-notch fa-spin text-2xl text-brand mb-2"></i>
               <span class="text-xs">Carregando imagem...</span>
             </div>
-            <img src="${currentStreamUrl}" alt="${name}" 
-              onload="document.getElementById('imageLoadingSpinner')?.remove()" 
+            <img id="zoomableImage" src="${currentStreamUrl}" alt="${name}" 
+              onload="document.getElementById('imageLoadingSpinner')?.remove(); initImageZoom();" 
               onerror="
                 this.style.display='none';
                 const spin = document.getElementById('imageLoadingSpinner');
                 if (spin) spin.innerHTML = '<div class=\\'text-center p-4\\'><i class=\\'fa-solid fa-triangle-exclamation text-amber-500 text-3xl mb-2\\'></i><p class=\\'text-sm font-semibold text-zinc-200\\'>Limite de transferência atingido</p><p class=\\'text-xs text-zinc-400 mt-1 max-w-sm\\'>A cota temporária do MEGA foi atingida ou o arquivo requer download.</p></div>';
               "
-              class="max-h-[82vh] max-w-full w-auto h-auto object-contain shadow-2xl transition-transform duration-200">
+              class="max-h-[82vh] max-w-full w-auto h-auto object-contain shadow-2xl transition-transform duration-100 ease-out will-change-transform">
+            
+            <div class="absolute bottom-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md text-[10px] text-zinc-400 font-mono flex items-center space-x-1.5 pointer-events-none">
+              <i class="fa-solid fa-magnifying-glass-plus text-zinc-300"></i>
+              <span>Pinça / Scroll / 2x Clique para Zoom</span>
+            </div>
           </div>
         `;
       } else if (isPdf(name)) {
@@ -1091,7 +1104,11 @@
         else if (ext === 'mkv') videoMime = 'video/x-matroska';
 
         video.innerHTML = `<source src="${currentStreamUrl}" type="${videoMime}">${tracksHtml}`;
-        mediaPlayerWrapper.appendChild(video);
+        
+        const videoWrapper = document.createElement('div');
+        videoWrapper.className = 'w-full h-full flex items-center justify-center relative overflow-hidden select-none';
+        videoWrapper.appendChild(video);
+        mediaPlayerWrapper.appendChild(videoWrapper);
 
         const preferredSpeed = parseFloat(localStorage.getItem('clonp_preferred_speed') || '1');
 
@@ -1103,6 +1120,33 @@
           ],
           seekTime: 10,
           speed: { selected: preferredSpeed, options: [0.5, 0.75, 1, 1.25, 1.5, 2] }
+        });
+
+        // Duplo Toque Inteligente no Celular com Efeito Visual de Onda
+        let lastTapTime = 0;
+        let lastTapSide = '';
+        videoWrapper.addEventListener('touchend', (e) => {
+          const currentTime = new Date().getTime();
+          const tapInterval = currentTime - lastTapTime;
+          const touch = e.changedTouches[0];
+          if (!touch) return;
+
+          const rect = videoWrapper.getBoundingClientRect();
+          const tapX = touch.clientX - rect.left;
+          const side = tapX > (rect.width / 2) ? 'right' : 'left';
+
+          if (tapInterval < 340 && tapInterval > 0 && side === lastTapSide) {
+            e.preventDefault();
+            const isForward = side === 'right';
+            if (isForward) {
+              activePlyr.forward(10);
+            } else {
+              activePlyr.rewind(10);
+            }
+            triggerRippleAnimation(videoWrapper, touch.clientX, touch.clientY, isForward);
+          }
+          lastTapTime = currentTime;
+          lastTapSide = side;
         });
 
         video.addEventListener('error', () => {
@@ -1155,6 +1199,218 @@
 
       mediaModal.classList.remove('hidden');
     };
+
+    // Pré-carregamento de imagens vizinhas (Preload)
+    function preloadNeighborImages(currentIndex) {
+      if (!viewableItemsList.length) return;
+      const nextIndex = (currentIndex + 1) % viewableItemsList.length;
+      const prevIndex = (currentIndex - 1 + viewableItemsList.length) % viewableItemsList.length;
+
+      const preloadUrl = (idx) => {
+        const item = viewableItemsList[idx];
+        if (item && isImage(item.name)) {
+          const img = new Image();
+          img.src = `/api/stream/${item.id}`;
+        }
+      };
+
+      preloadUrl(nextIndex);
+      preloadUrl(prevIndex);
+    }
+
+    // Efeito Visual de Onda do Duplo Toque (+10s / -10s)
+    function triggerRippleAnimation(container, clientX, clientY, isForward) {
+      const ripple = document.createElement('div');
+      const rect = container.getBoundingClientRect();
+      const x = clientX - rect.left;
+      const y = clientY - rect.top;
+
+      ripple.className = 'absolute pointer-events-none z-30 flex flex-col items-center justify-center bg-white/20 backdrop-blur-sm rounded-full w-24 h-24 -ml-12 -mt-12 text-white font-bold text-xs animate-ping';
+      ripple.innerHTML = isForward ? '<span>+10s ⏩</span>' : '<span>⏪ -10s</span>';
+      ripple.style.left = `${x}px`;
+      ripple.style.top = `${y}px`;
+      container.appendChild(ripple);
+      setTimeout(() => ripple.remove(), 450);
+    }
+
+    // Zoom Interativo (Pinch-to-zoom, Roda do Mouse e Arraste Pan)
+    function initImageZoom() {
+      const container = document.getElementById('imageZoomContainer');
+      const img = document.getElementById('zoomableImage');
+      if (!container || !img) return;
+
+      let scale = 1;
+      let panX = 0;
+      let panY = 0;
+      let isDragging = false;
+      let startX = 0;
+      let startY = 0;
+      let initialDistance = 0;
+
+      const updateTransform = () => {
+        if (scale <= 1) {
+          scale = 1;
+          panX = 0;
+          panY = 0;
+          container.style.cursor = 'zoom-in';
+        } else {
+          container.style.cursor = 'grab';
+        }
+        img.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+      };
+
+      // Zoom com scroll da roda do mouse
+      container.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const delta = e.deltaY < 0 ? 0.25 : -0.25;
+        scale = Math.min(Math.max(1, scale + delta), 4.5);
+        updateTransform();
+      }, { passive: false });
+
+      // Duplo clique para alternar zoom 1x e 2.5x
+      container.addEventListener('dblclick', (e) => {
+        scale = scale > 1 ? 1 : 2.5;
+        panX = 0;
+        panY = 0;
+        updateTransform();
+      });
+
+      // Pan com arrasto de mouse
+      container.addEventListener('mousedown', (e) => {
+        if (scale > 1) {
+          isDragging = true;
+          startX = e.clientX - panX;
+          startY = e.clientY - panY;
+          container.style.cursor = 'grabbing';
+        }
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        panX = e.clientX - startX;
+        panY = e.clientY - startY;
+        updateTransform();
+      });
+
+      window.addEventListener('mouseup', () => {
+        isDragging = false;
+        if (scale > 1) container.style.cursor = 'grab';
+      });
+
+      // Pinch to Zoom Mobile
+      container.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 2) {
+          initialDistance = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+          );
+        } else if (e.touches.length === 1 && scale > 1) {
+          isDragging = true;
+          startX = e.touches[0].clientX - panX;
+          startY = e.touches[0].clientY - panY;
+        }
+      }, { passive: true });
+
+      container.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 2 && initialDistance > 0) {
+          e.preventDefault();
+          const currentDistance = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+          );
+          const factor = currentDistance / initialDistance;
+          scale = Math.min(Math.max(1, scale * (factor > 1 ? 1.05 : 0.95)), 4.5);
+          updateTransform();
+        } else if (e.touches.length === 1 && isDragging && scale > 1) {
+          panX = e.touches[0].clientX - startX;
+          panY = e.touches[0].clientY - startY;
+          updateTransform();
+        }
+      }, { passive: false });
+
+      container.addEventListener('touchend', () => {
+        isDragging = false;
+        initialDistance = 0;
+      });
+    }
+
+    // Atalhos de Teclado no PC (Estilo YouTube)
+    document.addEventListener('keydown', (e) => {
+      if (mediaModal.classList.contains('hidden')) return;
+
+      // Não intercepta se o usuário estiver digitando em campos de input
+      if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+
+      const key = e.key.toLowerCase();
+
+      // Fechar modal
+      if (key === 'escape') {
+        closePlayer(true);
+        return;
+      }
+
+      // Navegação de Galeria (Setas Esquerda e Direita quando imagem ou foco fora do video)
+      if (key === 'arrowleft' && (!activePlyr || e.shiftKey)) {
+        navigateGallery(-1);
+        return;
+      }
+      if (key === 'arrowright' && (!activePlyr || e.shiftKey)) {
+        navigateGallery(1);
+        return;
+      }
+
+      if (activePlyr) {
+        // Atalhos estilo YouTube para vídeo
+        switch (key) {
+          case ' ':
+          case 'k':
+            e.preventDefault();
+            activePlyr.togglePlay();
+            break;
+          case 'f':
+            e.preventDefault();
+            activePlyr.fullscreen.toggle();
+            break;
+          case 'm':
+            e.preventDefault();
+            activePlyr.muted = !activePlyr.muted;
+            showToast(activePlyr.muted ? 'Mudo 🔇' : 'Som 🔊');
+            break;
+          case 'j':
+          case 'arrowleft':
+            e.preventDefault();
+            activePlyr.rewind(10);
+            showToast('⏪ -10s');
+            break;
+          case 'l':
+          case 'arrowright':
+            e.preventDefault();
+            activePlyr.forward(10);
+            showToast('+10s ⏩');
+            break;
+          case 'arrowup':
+            e.preventDefault();
+            activePlyr.volume = Math.min(1, activePlyr.volume + 0.1);
+            showToast(`Volume: ${Math.round(activePlyr.volume * 100)}%`);
+            break;
+          case 'arrowdown':
+            e.preventDefault();
+            activePlyr.volume = Math.max(0, activePlyr.volume - 0.1);
+            showToast(`Volume: ${Math.round(activePlyr.volume * 100)}%`);
+            break;
+          default:
+            // Teclas 0-9 para saltar porcentagens do vídeo
+            if (key >= '0' && key <= '9') {
+              e.preventDefault();
+              const percent = parseInt(key, 10) * 0.1;
+              if (activePlyr.duration) {
+                activePlyr.currentTime = activePlyr.duration * percent;
+                showToast(`Pulo para ${parseInt(key, 10) * 10}%`);
+              }
+            }
+        }
+      }
+    });
 
     function closePlayer(triggerHistoryBack = true) {
       if (activePlyr) {
