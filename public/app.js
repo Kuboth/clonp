@@ -852,7 +852,7 @@
 
     function goBackFolder() {
       if (!mediaModal.classList.contains('hidden')) {
-        closePlayer();
+        closePlayer(false);
         return true;
       }
       if (pathStack.length > 1) {
@@ -927,10 +927,17 @@
       }
     };
 
+    let modalHistoryPushed = false;
+
     window.openPlayer = (id, encodedName, subtitleId) => {
       // Salva a posição exata da rolagem antes de abrir o modal
       lastScrollPosition = window.scrollY || document.documentElement.scrollTop || 0;
       lastOpenedItemId = id;
+
+      if (!modalHistoryPushed) {
+        history.pushState({ modalOpen: true }, '', '#preview');
+        modalHistoryPushed = true;
+      }
 
       if (activePlyr) {
         activePlyr.destroy();
@@ -1125,13 +1132,20 @@
       mediaModal.classList.remove('hidden');
     };
 
-    function closePlayer() {
+    function closePlayer(triggerHistoryBack = true) {
       if (activePlyr) {
         activePlyr.destroy();
         activePlyr = null;
       }
       mediaPlayerWrapper.innerHTML = '';
       mediaModal.classList.add('hidden');
+
+      if (modalHistoryPushed) {
+        modalHistoryPushed = false;
+        if (triggerHistoryBack && window.location.hash === '#preview') {
+          history.back();
+        }
+      }
 
       // Garante que o card do item aberto esteja renderizado mesmo que tenha navegado na galeria
       if (currentGalleryIndex >= 0 && viewableItemsList[currentGalleryIndex]) {
@@ -1162,7 +1176,7 @@
       });
     }
 
-    closeModalBtn.addEventListener('click', closePlayer);
+    closeModalBtn.addEventListener('click', () => closePlayer(true));
     mediaModal.addEventListener('click', (e) => {
-      if (e.target === mediaModal) closePlayer();
+      if (e.target === mediaModal) closePlayer(true);
     });
