@@ -227,48 +227,12 @@ function createMegaFileInstance(url) {
  * @param {Function} [cb] 
  */
 function safeDownload(file, options = {}, cb) {
-  let activeProxy = null;
-
-  // Handler de retentativas estilo SmartProxy / MegaBasterd
-  const smartHandleRetries = (tries, error, retryCb) => {
-    const errMsg = (error && error.message) ? error.message : String(error);
-    const isBandwidthLimit = errMsg.includes('509') || errMsg.includes('Bandwidth limit') || errMsg.includes('rate limit');
-
-    console.warn(`[Stream/Download] Tentativa ${tries} com erro: ${errMsg}`);
-
-    if (isBandwidthLimit) {
-      if (activeProxy) {
-        markProxyCooldown(activeProxy, 3600);
-      }
-
-      // Se temos proxies configurados, rotaciona e tenta novamente com o proxy limpo
-      const nextProxy = getNextAvailableProxy();
-      if (nextProxy && file && file.api) {
-        activeProxy = nextProxy;
-        const newAgent = createAgent(activeProxy);
-        if (newAgent) {
-          file.api.httpAgent = newAgent;
-          file.api.httpsAgent = newAgent;
-          console.log(`[SmartProxy Failover] 509 detectado. Rotacionado para proxy: ${activeProxy.replace(/:[^:@]+@/, ':***@')}`);
-          return setTimeout(retryCb, 500);
-        }
-      }
-    }
-
-    if (tries > 6) {
-      return retryCb(error);
-    }
-
-    const backoff = Math.min(1000 * Math.pow(1.5, tries), 8000);
-    setTimeout(retryCb, backoff);
-  };
-
+  // Configurações estáveis recomendadas para streaming e download sem cortes
   const speedOpts = {
-    maxConnections: 6,
-    initialChunkSize: 256 * 1024,
-    chunkSizeIncrement: 256 * 1024,
-    maxChunkSize: 2 * 1024 * 1024,
-    handleRetries: smartHandleRetries,
+    maxConnections: 2,
+    initialChunkSize: 128 * 1024,
+    chunkSizeIncrement: 128 * 1024,
+    maxChunkSize: 1024 * 1024,
     ...options
   };
 
@@ -475,10 +439,22 @@ app.get('/api/stream/:id', streamLimiter, async (req, res) => {
 
       res.writeHead(206, headers);
       const downloadStream = safeDownload(file, { start, end });
-      downloadStream.on('error', (err) => {
-        console.error('Stream error:', err);
-        if (!res.headersSent) res.status(500).json({ error: 'Stream error: ' + (err.message || err) });
+      
+      req.on('close', () => {
+        if (downloadStream && typeof downloadStream.destroy === 'function') {
+          downloadStream.destroy();
+        }
       });
+
+      downloadStream.on('error', (err) => {
+        console.error('Stream range error:', err);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Stream error: ' + (err.message || err) });
+        } else {
+          res.end();
+        }
+      });
+
       return downloadStream.pipe(res);
     }
 
@@ -486,7 +462,7 @@ app.get('/api/stream/:id', streamLimiter, async (req, res) => {
       headers['Content-Length'] = fileSize;
     }
 
-    // Para arquivos pequenos (< 8MB), entrega tudo em 1 único bloco com buffer
+    // Para arquivos pequenos (< 8MB) em preview, entrega tudo em 1 único bloco com buffer
     if (fileSize && fileSize <= 8 * 1024 * 1024 && !isDownload) {
       return safeDownload(file, {}, (err, buf) => {
         if (err) {
@@ -499,13 +475,39 @@ app.get('/api/stream/:id', streamLimiter, async (req, res) => {
       });
     }
 
-    res.writeHead(200, headers);
+    // Para download ou streaming contínuo:
     const downloadStream = safeDownload(file);
-    downloadStream.on('error', (err) => {
-      console.error('Stream error:', err);
-      if (!res.headersSent) res.status(500).json({ error: 'Stream full error: ' + (err.message || err) });
+
+    req.on('close', () => {
+      if (downloadStream && typeof downloadStream.destroy === 'function') {
+        downloadStream.destroy();
+      }
     });
-    downloadStream.pipe(res);
+
+    let headersSent = false;
+    downloadStream.once('data', (firstChunk) => {
+      if (!headersSent && !res.headersSent) {
+        headersSent = true;
+        res.writeHead(200, headers);
+      }
+      res.write(firstChunk);
+    });
+
+    downloadStream.on('error', (err) => {
+      console.error('Download stream error:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Falha no download: ' + (err.message || err) });
+      } else {
+        res.end();
+      }
+    });
+
+    downloadStream.on('end', () => {
+      if (!headersSent && !res.headersSent) {
+        res.writeHead(200, headers);
+      }
+      res.end();
+    });
 
   } catch (err) {
     console.error('Erro no stream:', err);
