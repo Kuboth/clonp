@@ -120,48 +120,52 @@ setInterval(() => {
 }, 15 * 60 * 1000);
 
 // ============================================================================
-// SISTEMA SMARTPROXY (Inspirado no MegaBasterd - Seguro e Opt-in)
+// SISTEMA SMARTPROXY HÍBRIDO (Direto por padrão + Failover Inteligente no erro 509)
 // ============================================================================
 let proxyPool = [];
-let lastProxyFetch = 0;
 let proxyPointer = 0;
 /** @type {Map<string, number>} */
 const cooldownProxies = new Map();
 
-// O SmartProxy só força proxy se explicitamente ativado via env ou se houver CUSTOM_PROXIES válidos
-// Por padrão, usa conexão DIRETA super rápida, e só usa proxies como failover se configurado
-const SMART_PROXY_ENABLED = process.env.ENABLE_SMART_PROXY === 'true';
-
-async function refreshProxyPool() {
-  const now = Date.now();
-  if (now - lastProxyFetch < 30 * 60 * 1000 && proxyPool.length > 0) {
+/**
+ * Carrega a lista de proxies estruturados a partir da variável de ambiente CUSTOM_PROXIES
+ * Formatos suportados:
+ * - host:port
+ * - user:pass@host:port
+ * - http://user:pass@host:port
+ * - Separados por vírgula, ponto-e-vírgula ou quebra de linha
+ */
+function loadProxyPool() {
+  const rawList = process.env.CUSTOM_PROXIES || '';
+  if (!rawList) {
+    proxyPool = [];
     return proxyPool;
   }
 
-  const collected = [];
+  const collected = rawList
+    .split(/[,;\n]/)
+    .map(p => p.trim())
+    .filter(Boolean)
+    .map(p => {
+      if (!p.startsWith('http://') && !p.startsWith('https://') && !p.startsWith('socks5://')) {
+        return `http://${p}`;
+      }
+      return p;
+    });
 
-  // Proxies customizados adicionados pelo usuário (ex: CUSTOM_PROXIES="user:pass@ip:porta,ip2:porta")
-  if (process.env.CUSTOM_PROXIES) {
-    const customList = process.env.CUSTOM_PROXIES.split(/[,;\n]/).map(p => p.trim()).filter(Boolean);
-    collected.push(...customList);
-  }
-
-  if (collected.length > 0) {
-    proxyPool = Array.from(new Set(collected));
-    lastProxyFetch = now;
-    console.log(`[SmartProxy] Pool carregado com ${proxyPool.length} proxies.`);
-  }
+  proxyPool = Array.from(new Set(collected));
+  console.log(`[SmartProxy] Pool inicializado com ${proxyPool.length} proxy(ies) de alta velocidade.`);
   return proxyPool;
 }
 
-refreshProxyPool();
+loadProxyPool();
 
 /**
- * Retorna o próximo proxy disponível se configurado
+ * Retorna o próximo proxy disponível que não esteja em período de cooldown
  * @returns {string | null}
  */
 function getNextAvailableProxy() {
-  if (!SMART_PROXY_ENABLED || proxyPool.length === 0) return null;
+  if (proxyPool.length === 0) return null;
 
   const now = Date.now();
   const total = proxyPool.length;
@@ -174,56 +178,100 @@ function getNextAvailableProxy() {
       return candidate;
     }
   }
-  return null;
+  // Se todos estiverem em cooldown, usa o próximo ciclicamente
+  const fallback = proxyPool[proxyPointer % total];
+  proxyPointer = (proxyPointer + 1) % total;
+  return fallback;
 }
 
 /**
- * Cria uma instância HttpsProxyAgent para um proxy
- * @param {string | null} proxyStr 
+ * Cria uma instância HttpsProxyAgent com suporte a autenticação
+ * @param {string | null} proxyUrl 
  * @returns {HttpsProxyAgent<string> | null}
  */
-function createAgent(proxyStr) {
-  if (!proxyStr) return null;
+function createAgent(proxyUrl) {
+  if (!proxyUrl) return null;
   try {
-    const url = proxyStr.startsWith('http') ? proxyStr : `http://${proxyStr}`;
-    return new HttpsProxyAgent(url);
+    return new HttpsProxyAgent(proxyUrl);
   } catch (err) {
+    console.warn('[SmartProxy] Falha ao instanciar agente proxy:', err.message);
     return null;
   }
 }
 
 /**
+ * Marca um proxy em cooldown após atingir cota
+ * @param {string} proxyUrl 
+ * @param {number} [cooldownSeconds=1800] 30 minutos
+ */
+function markProxyCooldown(proxyUrl, cooldownSeconds = 1800) {
+  if (!proxyUrl) return;
+  cooldownProxies.set(proxyUrl, Date.now() + cooldownSeconds * 1000);
+  console.log(`[SmartProxy] Proxy ${proxyUrl.replace(/:[^:@]+@/, ':***@')} entrou em cooldown por ${cooldownSeconds}s.`);
+}
+
+/**
  * Cria uma instância File da biblioteca megajs
- * Conexão direta por padrão (ultra rápida e sem engasgos)
+ * Conexão direta por padrão (ultra rápida e sem delay)
  * @param {string} url URL pública do MEGA
  * @returns {any}
  */
 function createMegaFileInstance(url) {
-  const proxy = getNextAvailableProxy();
-  if (proxy) {
-    const agent = createAgent(proxy);
-    if (agent) {
-      return File.fromURL(url, { httpAgent: agent, httpsAgent: agent });
-    }
-  }
   return File.fromURL(url);
 }
 
 /**
- * Executa download com opções otimizadas de alta velocidade e vazão de dados
+ * Executa download seguro com alta vazão e failover automático de proxy no erro 509
  * @param {any} file 
  * @param {object} [options] 
  * @param {Function} [cb] 
  */
 function safeDownload(file, options = {}, cb) {
-  // Ajustes de throughput: blocos de até 2MB e 6 conexões paralelas para máxima velocidade da rede
+  let activeProxy = null;
+
+  // Handler de retentativas estilo SmartProxy / MegaBasterd
+  const smartHandleRetries = (tries, error, retryCb) => {
+    const errMsg = (error && error.message) ? error.message : String(error);
+    const isBandwidthLimit = errMsg.includes('509') || errMsg.includes('Bandwidth limit') || errMsg.includes('rate limit');
+
+    console.warn(`[Stream/Download] Tentativa ${tries} com erro: ${errMsg}`);
+
+    if (isBandwidthLimit) {
+      if (activeProxy) {
+        markProxyCooldown(activeProxy, 3600);
+      }
+
+      // Se temos proxies configurados, rotaciona e tenta novamente com o proxy limpo
+      const nextProxy = getNextAvailableProxy();
+      if (nextProxy && file && file.api) {
+        activeProxy = nextProxy;
+        const newAgent = createAgent(activeProxy);
+        if (newAgent) {
+          file.api.httpAgent = newAgent;
+          file.api.httpsAgent = newAgent;
+          console.log(`[SmartProxy Failover] 509 detectado. Rotacionado para proxy: ${activeProxy.replace(/:[^:@]+@/, ':***@')}`);
+          return setTimeout(retryCb, 500);
+        }
+      }
+    }
+
+    if (tries > 6) {
+      return retryCb(error);
+    }
+
+    const backoff = Math.min(1000 * Math.pow(1.5, tries), 8000);
+    setTimeout(retryCb, backoff);
+  };
+
   const speedOpts = {
     maxConnections: 6,
     initialChunkSize: 256 * 1024,
     chunkSizeIncrement: 256 * 1024,
     maxChunkSize: 2 * 1024 * 1024,
+    handleRetries: smartHandleRetries,
     ...options
   };
+
   return file.download(speedOpts, cb);
 }
 
@@ -622,11 +670,17 @@ if (process.env.RENDER_EXTERNAL_URL) {
 
 // 8. Status do SmartProxy
 app.get('/api/proxy-status', async (req, res) => {
+  const now = Date.now();
+  let inCooldown = 0;
+  for (const exp of cooldownProxies.values()) {
+    if (now < exp) inCooldown++;
+  }
+
   res.json({
-    smartProxyEnabled: SMART_PROXY_ENABLED,
+    smartProxyConfigured: proxyPool.length > 0,
     totalProxies: proxyPool.length,
-    activeAvailable: proxyPool.length,
-    lastUpdate: new Date(lastProxyFetch).toLocaleTimeString()
+    activeAvailable: Math.max(0, proxyPool.length - inCooldown),
+    inCooldownCount: inCooldown
   });
 });
 
@@ -634,6 +688,6 @@ app.listen(PORT, () => {
   console.log(`===============================================`);
   console.log(` Clonp rodando com sucesso e protegido!`);
   console.log(` Porta: ${PORT}`);
-  console.log(` SmartProxy Ativo: ${SMART_PROXY_ENABLED}`);
+  console.log(` SmartProxy Failover: ${proxyPool.length > 0 ? `${proxyPool.length} proxies carregados` : 'Desativado (sem CUSTOM_PROXIES)'}`);
   console.log(`===============================================`);
 });
