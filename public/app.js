@@ -407,171 +407,106 @@
       }
     });
 
-    // ========================================================================
-    // SISTEMA DE MINIATURAS INTELIGENTE: FILA CONTROLADA + CACHE DUPLO (RAM + IndexedDB)
-    // ========================================================================
-    const thumbMemoryCache = new Map(); // Cache RAM de acesso imediato (0ms)
-    const pendingThumbQueue = [];       // Fila ordenada de requisições de miniaturas
-    let activeThumbWorkers = 0;         // Contador de requisições paralelas ativas
-    const MAX_CONCURRENT_THUMBS = 2;    // Máximo de 2 downloads concorrentes para nunca saturar conexões
+    // Fila sequencial e controlada para gerar miniaturas de vídeo com cache em 2 camadas (LRU em RAM + IndexedDB permanente)
+    
+    // IntersectionObserver de alta precisão para carregar apenas imagens que entram no campo de visão
+    const imageLazyObserver = new IntersectionObserver((entries, observer) => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        const img = entry.target;
+        observer.unobserve(img);
+        const realSrc = img.dataset.src;
+        if (realSrc) {
+          img.src = realSrc;
+          img.removeAttribute('data-src');
+        }
+      });
+    }, { rootMargin: '150px 0px' });
 
-    // 1. Observer de Interseção para Imagens e Vídeos
-    const mediaThumbObserver = new IntersectionObserver((entries, observer) => {
+    const videoThumbQueue = [];
+    let isProcessingVideoThumb = false;
+    const videoThumbCache = new Map(); // Camada 1: RAM (LRU)
+
+    const videoThumbObserver = new IntersectionObserver((entries, observer) => {
       entries.forEach(async (entry) => {
         if (!entry.isIntersecting) return;
-        const targetEl = entry.target;
-        observer.unobserve(targetEl);
+        const container = entry.target;
+        observer.unobserve(container);
 
-        const mediaId = targetEl.dataset.mediaId;
-        const mediaType = targetEl.dataset.mediaType; // 'image' ou 'video'
-        if (!mediaId) return;
+        const videoId = container.dataset.videoId;
+        if (!videoId) return;
 
-        // A. Verifica no Cache em RAM
-        if (thumbMemoryCache.has(mediaId)) {
-          applyCachedThumbnail(targetEl, thumbMemoryCache.get(mediaId), mediaType);
+        // 1. Verifica no Cache de Memória RAM (0ms)
+        if (videoThumbCache.has(videoId)) {
+          const cached = videoThumbCache.get(videoId);
+          if (typeof cached === 'object' && cached.thumbUrl) {
+            applyVideoThumb(container, cached.thumbUrl, cached.isVertical);
+          } else {
+            applyVideoThumb(container, cached, false);
+          }
           return;
         }
 
-        // B. Verifica no IndexedDB permanente do navegador
+        // 2. Verifica no Armazenamento Permanente IndexedDB (idb-keyval)
         try {
           if (window.idbKeyval) {
-            const cachedDb = await idbKeyval.get(`thumb_${mediaId}`);
+            const cachedDb = await idbKeyval.get(`thumb_${videoId}`);
             if (cachedDb) {
-              thumbMemoryCache.set(mediaId, cachedDb);
-              applyCachedThumbnail(targetEl, cachedDb, mediaType);
+              videoThumbCache.set(videoId, cachedDb);
+              if (typeof cachedDb === 'object' && cachedDb.thumbUrl) {
+                applyVideoThumb(container, cachedDb.thumbUrl, cachedDb.isVertical);
+              } else {
+                applyVideoThumb(container, cachedDb, false);
+              }
               return;
             }
           }
         } catch (e) {}
 
-        // C. Adiciona na fila sequencial para carregamento controlado
-        pendingThumbQueue.push({ mediaId, mediaType, targetEl });
-        pumpThumbQueue();
+        // 3. Se não tem em nenhum dos caches, adiciona na fila de geração client-side
+        videoThumbQueue.push({ videoId, container });
+        processNextVideoThumb();
       });
-    }, { rootMargin: '120px 0px' });
+    }, { rootMargin: '120px' });
 
-    function applyCachedThumbnail(targetEl, cachedData, mediaType) {
-      const dataUrl = typeof cachedData === 'object' ? cachedData.thumbUrl : cachedData;
-      const isVertical = typeof cachedData === 'object' ? cachedData.isVertical : false;
+    function applyVideoThumb(container, dataUrl, isVertical = false) {
+      const badgeHtml = isVertical 
+        ? `<div class="absolute bottom-1 right-1 bg-black/75 backdrop-blur-sm px-1 py-0.5 rounded text-[8px] text-zinc-300 font-mono leading-none border border-zinc-700/60 flex items-center space-x-0.5">
+             <i class="fa-solid fa-mobile-screen-button text-[7px] text-zinc-400"></i>
+             <span>9:16</span>
+           </div>`
+        : `<div class="absolute bottom-1 right-1 bg-black/75 backdrop-blur-sm px-1 py-0.5 rounded text-[8px] text-zinc-400 font-mono leading-none border border-zinc-700/60">
+             16:9
+           </div>`;
 
-      if (mediaType === 'image') {
-        if (targetEl.tagName === 'IMG') {
-          targetEl.src = dataUrl;
-          targetEl.classList.remove('opacity-0');
-        } else {
-          targetEl.innerHTML = `<img src="${dataUrl}" class="w-full h-full object-cover transition-opacity duration-300 opacity-0" onload="this.classList.remove('opacity-0')">`;
-        }
-      } else {
-        const badgeHtml = isVertical 
-          ? `<div class="absolute bottom-1 right-1 bg-black/75 backdrop-blur-sm px-1 py-0.5 rounded text-[8px] text-zinc-300 font-mono leading-none border border-zinc-700/60 flex items-center space-x-0.5">
-               <i class="fa-solid fa-mobile-screen-button text-[7px] text-zinc-400"></i>
-               <span>9:16</span>
-             </div>`
-          : `<div class="absolute bottom-1 right-1 bg-black/75 backdrop-blur-sm px-1 py-0.5 rounded text-[8px] text-zinc-400 font-mono leading-none border border-zinc-700/60">
-               16:9
-             </div>`;
-
-        targetEl.innerHTML = `
-          <img src="${dataUrl}" class="w-full h-full object-cover transition-opacity duration-300 opacity-0" onload="this.classList.remove('opacity-0')">
-          ${badgeHtml}
-        `;
-      }
+      container.innerHTML = `
+        <img src="${dataUrl}" class="w-full h-full object-cover transition-opacity duration-300 opacity-0" onload="this.classList.remove('opacity-0')">
+        ${badgeHtml}
+      `;
     }
 
-    function pumpThumbQueue() {
-      while (activeThumbWorkers < MAX_CONCURRENT_THUMBS && pendingThumbQueue.length > 0) {
-        activeThumbWorkers++;
-        const task = pendingThumbQueue.shift();
-        if (task.mediaType === 'image') {
-          processImageTask(task);
-        } else {
-          processVideoTask(task);
-        }
-      }
-    }
+    function processNextVideoThumb() {
+      if (isProcessingVideoThumb || videoThumbQueue.length === 0) return;
+      isProcessingVideoThumb = true;
 
-    // Processamento controlado de miniatura de IMAGEM
-    function processImageTask(task) {
-      const { mediaId, targetEl } = task;
-      const thumbUrl = `${window.location.origin}/api/thumbnail/${mediaId}`;
-
-      const img = new Image();
-      img.decoding = 'async';
-
-      const done = () => {
-        activeThumbWorkers--;
-        setTimeout(pumpThumbQueue, 40);
-      };
-
-      const timeout = setTimeout(() => {
-        img.src = '';
-        done();
-      }, 10000);
-
-      img.onload = () => {
-        clearTimeout(timeout);
-        try {
-          // Compacta a imagem em miniatura leve (JPEG de 12KB) para salvar no IndexedDB
-          const canvas = document.createElement('canvas');
-          const maxDim = 280;
-          let w = img.naturalWidth || 200;
-          let h = img.naturalHeight || 200;
-          if (w > h && w > maxDim) {
-            h = Math.round((h * maxDim) / w);
-            w = maxDim;
-          } else if (h > maxDim) {
-            w = Math.round((w * maxDim) / h);
-            h = maxDim;
-          }
-          canvas.width = w;
-          canvas.height = h;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, w, h);
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.70);
-
-          thumbMemoryCache.set(mediaId, dataUrl);
-          if (window.idbKeyval) {
-            idbKeyval.set(`thumb_${mediaId}`, dataUrl).catch(() => {});
-          }
-
-          applyCachedThumbnail(targetEl, dataUrl, 'image');
-        } catch (e) {
-          thumbMemoryCache.set(mediaId, thumbUrl);
-          applyCachedThumbnail(targetEl, thumbUrl, 'image');
-        }
-        done();
-      };
-
-      img.onerror = () => {
-        clearTimeout(timeout);
-        done();
-      };
-
-      img.src = thumbUrl;
-    }
-
-    // Processamento controlado de miniatura de VÍDEO
-    function processVideoTask(task) {
-      const { mediaId, targetEl } = task;
-      const streamUrl = `${window.location.origin}/api/stream/${mediaId}`;
-
+      const { videoId, container } = videoThumbQueue.shift();
       const video = document.createElement('video');
       video.muted = true;
       video.playsInline = true;
-      video.preload = 'metadata';
+      video.preload = 'auto';
 
-      let isDone = false;
-      const done = () => {
-        if (isDone) return;
-        isDone = true;
+      let cleanedUp = false;
+      const cleanup = () => {
+        if (cleanedUp) return;
+        cleanedUp = true;
         video.src = '';
         video.load();
         video.remove();
-        activeThumbWorkers--;
-        setTimeout(pumpThumbQueue, 60);
+        isProcessingVideoThumb = false;
+        setTimeout(processNextVideoThumb, 120);
       };
 
-      const timeout = setTimeout(done, 8000);
+      const timeout = setTimeout(cleanup, 5000);
 
       const captureFrame = () => {
         try {
@@ -579,7 +514,7 @@
           const vh = video.videoHeight || 9;
           if (!video.videoWidth || !video.videoHeight) {
             clearTimeout(timeout);
-            done();
+            cleanup();
             return;
           }
           const isVertical = vh > vw;
@@ -597,16 +532,21 @@
           const thumbUrl = canvas.toDataURL('image/jpeg', 0.65);
           
           const cachePayload = { thumbUrl, isVertical };
-          thumbMemoryCache.set(mediaId, cachePayload);
+
+          if (videoThumbCache.size > 150) {
+            const firstKey = videoThumbCache.keys().next().value;
+            videoThumbCache.delete(firstKey);
+          }
+          videoThumbCache.set(videoId, cachePayload);
 
           if (window.idbKeyval) {
-            idbKeyval.set(`thumb_${mediaId}`, cachePayload).catch(() => {});
+            idbKeyval.set(`thumb_${videoId}`, cachePayload).catch(() => {});
           }
 
-          applyCachedThumbnail(targetEl, cachePayload, 'video');
+          applyVideoThumb(container, thumbUrl, isVertical);
         } catch (e) {}
         clearTimeout(timeout);
-        done();
+        cleanup();
       };
 
       video.addEventListener('loadedmetadata', () => {
@@ -617,11 +557,20 @@
         }
       }, { once: true });
 
-      video.addEventListener('loadeddata', captureFrame, { once: true });
-      video.addEventListener('seeked', captureFrame, { once: true });
-      video.addEventListener('error', done, { once: true });
+      video.addEventListener('loadeddata', () => {
+        captureFrame();
+      }, { once: true });
 
-      video.src = streamUrl;
+      video.addEventListener('seeked', () => {
+        captureFrame();
+      }, { once: true });
+
+      video.addEventListener('error', () => {
+        clearTimeout(timeout);
+        cleanup();
+      }, { once: true });
+
+      video.src = `${window.location.origin}/api/stream/${videoId}`;
     }
 
     function renderBreadcrumbs() {
@@ -703,8 +652,6 @@
     }
 
     function renderFolder(folderNode) {
-      // Limpa a fila pendente da pasta anterior para priorizar imediatamente a pasta aberta
-      pendingThumbQueue.length = 0;
       fileListContainer.innerHTML = '';
       currentFolderChildren = folderNode.children || [];
       currentFolderChildren = sortItems(currentFolderChildren);
@@ -800,18 +747,15 @@
           let thumbnailHtml = '';
           if (isImg) {
             thumbnailHtml = `
-              <div class="thumb-media-container w-full h-28 rounded-lg overflow-hidden bg-zinc-950 border border-zinc-800/90 flex items-center justify-center mb-2 relative group-hover:border-zinc-700 transition" data-media-id="${item.id}" data-media-type="image">
-                <div class="thumb-placeholder flex flex-col items-center justify-center text-zinc-500 text-[10px]">
-                  <i class="fa-solid fa-image text-xl mb-1 text-zinc-600"></i>
-                  <span>IMG</span>
-                </div>
+              <div class="w-full h-28 rounded-lg overflow-hidden bg-zinc-950 border border-zinc-800/90 flex items-center justify-center mb-2 relative group-hover:border-zinc-700 transition">
+                <img data-src="${fullStreamUrl}" alt="${item.name}" loading="lazy" decoding="async" class="lazy-image-target w-full h-full object-cover transition-opacity duration-300 opacity-0" onload="this.classList.remove('opacity-0')" onerror="this.parentElement.innerHTML='<div class=\\'flex flex-col items-center justify-center text-zinc-500 text-[10px]\\'><i class=\\'fa-solid fa-image text-xl mb-1 text-zinc-600\\'></i><span>IMG</span></div>'">
                 <div class="absolute bottom-1 right-1 bg-black/70 backdrop-blur-sm px-1 py-0.5 rounded text-[9px] text-zinc-300 font-mono leading-none">
                   IMG
                 </div>
               </div>`;
           } else if (isVid) {
             thumbnailHtml = `
-              <div class="thumb-media-container w-full h-28 rounded-lg overflow-hidden bg-zinc-950 border border-zinc-800/90 flex flex-col items-center justify-center mb-2 relative group-hover:border-zinc-700 transition" data-media-id="${item.id}" data-media-type="video">
+              <div class="video-thumb-container w-full h-28 rounded-lg overflow-hidden bg-zinc-950 border border-zinc-800/90 flex flex-col items-center justify-center mb-2 relative group-hover:border-zinc-700 transition" data-video-id="${item.id}">
                 <div class="w-9 h-9 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 flex items-center justify-center mb-1 group-hover:scale-110 transition">
                   <i class="fa-solid fa-play text-xs"></i>
                 </div>
@@ -892,16 +836,12 @@
           };
 
           const previewIconOrThumb = isImg 
-            ? `<div class="thumb-media-container w-7 h-7 rounded-md overflow-hidden bg-zinc-950 border border-zinc-800 flex items-center justify-center flex-shrink-0" data-media-id="${item.id}" data-media-type="image">
-                 <i class="fa-solid fa-image text-xs text-zinc-600"></i>
+            ? `<div class="w-7 h-7 rounded-md overflow-hidden bg-zinc-950 border border-zinc-800 flex-shrink-0">
+                 <img data-src="${fullStreamUrl}" alt="${item.name}" loading="lazy" decoding="async" class="lazy-image-target w-full h-full object-cover transition-opacity duration-300 opacity-0" onload="this.classList.remove('opacity-0')">
                </div>`
-            : (isVid 
-                ? `<div class="thumb-media-container w-7 h-7 rounded-md overflow-hidden bg-zinc-950 border border-zinc-800 flex items-center justify-center flex-shrink-0" data-media-id="${item.id}" data-media-type="video">
-                     <i class="fa-solid fa-play text-[10px] text-zinc-500"></i>
-                   </div>`
-                : `<div class="w-7 h-7 rounded-md bg-zinc-900 border border-zinc-800 flex items-center justify-center flex-shrink-0">
-                     <i class="fa-solid ${iconClass} text-xs"></i>
-                   </div>`);
+            : `<div class="w-7 h-7 rounded-md bg-zinc-900 border border-zinc-800 flex items-center justify-center flex-shrink-0">
+                 <i class="fa-solid ${iconClass} text-xs"></i>
+               </div>`;
 
           const checkMarkList = isSelectionMode
             ? `<div class="w-3.5 h-3.5 rounded ${isSelected ? 'bg-zinc-100 text-zinc-950' : 'border border-zinc-600'} flex items-center justify-center text-[9px] mr-1 flex-shrink-0">
@@ -936,9 +876,14 @@
         }
       }
 
-      const thumbTarget = card.querySelector('.thumb-media-container');
-      if (thumbTarget) {
-        mediaThumbObserver.observe(thumbTarget);
+      const videoThumbTarget = card.querySelector('.video-thumb-container');
+      if (videoThumbTarget) {
+        videoThumbObserver.observe(videoThumbTarget);
+      }
+
+      const lazyImgTarget = card.querySelector('.lazy-image-target');
+      if (lazyImgTarget) {
+        imageLazyObserver.observe(lazyImgTarget);
       }
 
       return card;
