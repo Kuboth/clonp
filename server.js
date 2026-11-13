@@ -221,11 +221,45 @@ function createMegaFileInstance(url) {
 }
 
 /**
- * Executa download seguro com alta vazão e failover automático de proxy no erro 509
- * @param {any} file 
- * @param {object} [options] 
- * @param {Function} [cb] 
+ * Gera um token imutável e autossuficiente contendo a chave e ID do arquivo.
+ * Permite que downloads ativos continuem ou sejam retomados mesmo após o reinício do servidor (zero downtime).
+ * @param {any} node 
+ * @returns {string}
  */
+function createStatelessFileId(node) {
+  try {
+    const meta = {
+      d: node.downloadId,
+      k: node.key ? node.key.toString('base64') : null,
+      n: node.name,
+      s: node.size
+    };
+    return Buffer.from(JSON.stringify(meta)).toString('base64url');
+  } catch (err) {
+    return `${node.downloadId || node.nodeId || Math.random().toString(36).substring(7)}`;
+  }
+}
+
+/**
+ * Reconstrói transparentemente uma instância megajs.File a partir de um token autossuficiente
+ * @param {string} token 
+ * @returns {any | null}
+ */
+function resolveStatelessFile(token) {
+  try {
+    const decoded = JSON.parse(Buffer.from(token, 'base64url').toString('utf8'));
+    if (decoded && decoded.d && decoded.k) {
+      const file = new File({
+        downloadId: decoded.d,
+        key: Buffer.from(decoded.k, 'base64')
+      });
+      file.name = decoded.n || 'arquivo';
+      file.size = decoded.s || 0;
+      return file;
+    }
+  } catch (err) {}
+  return null;
+}
 function safeDownload(file, options = {}, cb) {
   // Configuração Ultra Inteligente: 6 conexões concorrentes, partida ágil em 256KB escalando dinamicamente até 3MB
   const speedOpts = {
@@ -282,7 +316,7 @@ app.post('/api/inspect', inspectLimiter, async (req, res) => {
       const allFiles = [];
 
       const buildTree = (node, currentPath = '') => {
-        const nodeId = `${node.downloadId || node.nodeId || Math.random().toString(36).substring(7)}`;
+        const nodeId = createStatelessFileId(node);
         fileInstancesCache.set(nodeId, { instance: node, cachedAt: now });
 
         const timestamp = node.timestamp ? node.timestamp * 1000 : (node.mtime ? new Date(node.mtime).getTime() : Date.now());
@@ -340,7 +374,7 @@ app.post('/api/inspect', inspectLimiter, async (req, res) => {
         tree: rootTree
       });
     } else {
-      const cacheKey = `${fileOrFolder.downloadId || fileOrFolder.nodeId || Math.random().toString(36).substring(7)}`;
+      const cacheKey = createStatelessFileId(fileOrFolder);
       fileInstancesCache.set(cacheKey, { instance: fileOrFolder, cachedAt: now });
 
       const timestamp = fileOrFolder.timestamp ? fileOrFolder.timestamp * 1000 : Date.now();
@@ -386,14 +420,22 @@ app.get('/api/stream/:id', streamLimiter, async (req, res) => {
   const { id } = req.params;
   const isDownload = req.query.download === '1';
 
+  let file = null;
   const cached = fileInstancesCache.get(id);
-  if (!cached || !cached.instance) {
-    return res.status(404).json({ error: 'Arquivo expirado ou não encontrado no cache. Inspecione o link novamente.' });
+  if (cached && cached.instance) {
+    cached.cachedAt = Date.now();
+    file = cached.instance;
+  } else {
+    // Reconstituição transparente pós-deploy (Stateless Resume)
+    file = resolveStatelessFile(id);
+    if (file) {
+      fileInstancesCache.set(id, { instance: file, cachedAt: Date.now() });
+    }
   }
 
-  // Renova o TTL do arquivo que está sendo baixado/assistido
-  cached.cachedAt = Date.now();
-  const file = cached.instance;
+  if (!file) {
+    return res.status(404).json({ error: 'Arquivo expirado ou não encontrado no cache. Inspecione o link novamente.' });
+  }
 
   try {
     const filename = sanitizeFilename(file.name);
