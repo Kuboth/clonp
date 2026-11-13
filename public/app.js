@@ -408,6 +408,21 @@
     });
 
     // Fila sequencial e controlada para gerar miniaturas de vídeo com cache em 2 camadas (LRU em RAM + IndexedDB permanente)
+    
+    // IntersectionObserver de alta precisão para carregar apenas imagens que entram no campo de visão
+    const imageLazyObserver = new IntersectionObserver((entries, observer) => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        const img = entry.target;
+        observer.unobserve(img);
+        const realSrc = img.dataset.src;
+        if (realSrc) {
+          img.src = realSrc;
+          img.removeAttribute('data-src');
+        }
+      });
+    }, { rootMargin: '150px 0px' });
+
     const videoThumbQueue = [];
     let isProcessingVideoThumb = false;
     const videoThumbCache = new Map(); // Camada 1: RAM (LRU)
@@ -488,7 +503,7 @@
         video.load();
         video.remove();
         isProcessingVideoThumb = false;
-        setTimeout(processNextVideoThumb, 40);
+        setTimeout(processNextVideoThumb, 120);
       };
 
       const timeout = setTimeout(cleanup, 5000);
@@ -733,7 +748,7 @@
           if (isImg) {
             thumbnailHtml = `
               <div class="w-full h-28 rounded-lg overflow-hidden bg-zinc-950 border border-zinc-800/90 flex items-center justify-center mb-2 relative group-hover:border-zinc-700 transition">
-                <img src="${fullStreamUrl}" alt="${item.name}" loading="lazy" decoding="async" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='<div class=\\'flex flex-col items-center justify-center text-zinc-500 text-[10px]\\'><i class=\\'fa-solid fa-image text-xl mb-1 text-zinc-600\\'></i><span>IMG</span></div>'">
+                <img data-src="${fullStreamUrl}" alt="${item.name}" loading="lazy" decoding="async" class="lazy-image-target w-full h-full object-cover transition-opacity duration-300 opacity-0" onload="this.classList.remove('opacity-0')" onerror="this.parentElement.innerHTML='<div class=\\'flex flex-col items-center justify-center text-zinc-500 text-[10px]\\'><i class=\\'fa-solid fa-image text-xl mb-1 text-zinc-600\\'></i><span>IMG</span></div>'">
                 <div class="absolute bottom-1 right-1 bg-black/70 backdrop-blur-sm px-1 py-0.5 rounded text-[9px] text-zinc-300 font-mono leading-none">
                   IMG
                 </div>
@@ -822,7 +837,7 @@
 
           const previewIconOrThumb = isImg 
             ? `<div class="w-7 h-7 rounded-md overflow-hidden bg-zinc-950 border border-zinc-800 flex-shrink-0">
-                 <img src="${fullStreamUrl}" alt="${item.name}" loading="lazy" decoding="async" class="w-full h-full object-cover">
+                 <img data-src="${fullStreamUrl}" alt="${item.name}" loading="lazy" decoding="async" class="lazy-image-target w-full h-full object-cover transition-opacity duration-300 opacity-0" onload="this.classList.remove('opacity-0')">
                </div>`
             : `<div class="w-7 h-7 rounded-md bg-zinc-900 border border-zinc-800 flex items-center justify-center flex-shrink-0">
                  <i class="fa-solid ${iconClass} text-xs"></i>
