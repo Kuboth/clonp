@@ -227,12 +227,12 @@ function createMegaFileInstance(url) {
  * @param {Function} [cb] 
  */
 function safeDownload(file, options = {}, cb) {
-  // Configurações estáveis recomendadas para streaming e download sem cortes
+  // Configuração Turbo Otimizada: 4 conexões paralelas com blocos progressivos de 256KB a 2MB
   const speedOpts = {
-    maxConnections: 2,
-    initialChunkSize: 128 * 1024,
-    chunkSizeIncrement: 128 * 1024,
-    maxChunkSize: 1024 * 1024,
+    maxConnections: 4,
+    initialChunkSize: 256 * 1024,
+    chunkSizeIncrement: 256 * 1024,
+    maxChunkSize: 2 * 1024 * 1024,
     ...options
   };
 
