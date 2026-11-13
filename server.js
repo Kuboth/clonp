@@ -424,11 +424,13 @@ function safeDownload(file, options = {}, cb) {
     setTimeout(retryCb, backoff);
   };
 
+  // Configuração inteligente com forceHttps para compatibilidade total com túneis HTTPS e proxies
   const speedOpts = {
-    maxConnections: 4,
+    forceHttps: true,
+    maxConnections: 2,
     initialChunkSize: 256 * 1024,
-    chunkSizeIncrement: 512 * 1024,
-    maxChunkSize: 2 * 1024 * 1024,
+    chunkSizeIncrement: 256 * 1024,
+    maxChunkSize: 1024 * 1024,
     handleRetries: smartHandleRetries,
     ...options
   };
