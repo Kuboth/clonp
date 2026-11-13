@@ -6,7 +6,6 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const mime = require('mime-types');
@@ -21,19 +20,6 @@ const PORT = process.env.PORT || 3000;
 
 // Configuração de Proxy confiável (Render / PaaS)
 app.set('trust proxy', 1);
-
-// Ativa compressão HTTP Gzip/Deflate para páginas, JSONs e scripts (exclui streams de mídia)
-app.use(compression({
-  filter: (req, res) => {
-    // Não compacta rotas de streaming e downloads binários que já possuem compressão própria
-    if (req.path.startsWith('/api/stream') || req.path.startsWith('/api/download-batch')) {
-      return false;
-    }
-    return compression.filter(req, res);
-  },
-  level: 6,
-  threshold: 1024 // Compacta apenas respostas maiores que 1KB
-}));
 
 // Middleware manual de CORS e cabeçalhos de mídia permissivos para Canvas/Video
 app.use((req, res, next) => {
@@ -57,11 +43,7 @@ app.use(
 
 app.use(cors());
 app.use(express.json({ limit: '200kb' })); // Limita payload de JSON contra ataques de overflow
-app.use(express.static(path.join(__dirname, 'public'), {
-  maxAge: '1d',
-  etag: true,
-  lastModified: true
-}));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // 2. Rate Limiting (Proteção contra DoS / Abuso)
 const inspectLimiter = rateLimit({
@@ -708,14 +690,13 @@ app.get('/api/health', (req, res) => {
   res.send('OK');
 });
 
-// Auto-ping interno inteligente para manter a instância do Render ativa (Anti-Sleep)
-const externalUrl = process.env.RENDER_EXTERNAL_URL || process.env.PUBLIC_URL || (process.env.PORT ? `http://localhost:${PORT}` : null);
-if (externalUrl) {
-  const keepAliveUrl = externalUrl.startsWith('http') ? `${externalUrl}/api/health` : `https://${externalUrl}/api/health`;
+// Auto-ping interno para manter acordado se URL configurada (ou Render)
+if (process.env.RENDER_EXTERNAL_URL) {
+  const keepAliveUrl = `${process.env.RENDER_EXTERNAL_URL}/api/health`;
   setInterval(() => {
     axios.get(keepAliveUrl).catch(() => {});
-  }, 9 * 60 * 1000); // Dispara a cada 9 minutos (abaixo dos 15min do Render sleep)
-  console.log(`[Keep-Alive] Auto-ping ativo para manter acordado: ${keepAliveUrl}`);
+  }, 10 * 60 * 1000); // A cada 10 minutos
+  console.log(`[Keep-Alive] Auto-ping ativo para: ${keepAliveUrl}`);
 }
 
 // 8. Status do SmartProxy

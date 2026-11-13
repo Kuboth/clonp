@@ -53,10 +53,9 @@
       -webkit-tap-highlight-color: transparent;
       letter-spacing: -0.011em;
     }
-    /* Otimização de Renderização Virtual do DOM (content-visibility para 60/120 FPS cravados em listas longas) */
-    .file-item-card {
-      content-visibility: auto;
-      contain-intrinsic-size: 140px;
+    .touch-target {
+      min-height: 40px;
+      min-width: 40px;
     }
     .plyr--video {
       border-radius: 0.75rem;
@@ -120,7 +119,7 @@
         </div>
         <div class="flex items-center space-x-1.5">
           <span class="font-semibold text-sm tracking-tight text-zinc-100">clonp</span>
-          <span id="appVersionBadge" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-400 border border-zinc-800">v3.0</span>
+          <span id="appVersionBadge" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-400 border border-zinc-800">v2.9</span>
         </div>
       </div>
       
