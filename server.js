@@ -293,6 +293,46 @@ function markProxyCooldown(proxyUrl, cooldownSeconds = 1800) {
 }
 
 /**
+ * Executa requisições de chunks através de Proxy via Axios (totalmente compatível com HttpsProxyAgent no Node 18+)
+ * e retorna uma interface idêntica à Fetch Response para o megajs.
+ * @param {string} proxyUrl 
+ * @param {string} targetUrl 
+ * @param {any} [opts] 
+ */
+async function fetchWithProxyAxios(proxyUrl, targetUrl, opts = {}) {
+  const agent = createAgent(proxyUrl);
+  if (!agent) throw new Error('Falha ao criar agente para o proxy');
+
+  const headers = { ...(opts.headers || {}) };
+  const method = (opts.method || 'GET').toLowerCase();
+
+  const response = await axios({
+    url: targetUrl,
+    method,
+    headers,
+    httpsAgent: agent,
+    httpAgent: agent,
+    data: opts.body,
+    responseType: 'arraybuffer',
+    timeout: 12000,
+    validateStatus: () => true
+  });
+
+  const buffer = Buffer.isBuffer(response.data) ? response.data : Buffer.from(response.data || '');
+
+  return {
+    status: response.status,
+    headers: {
+      get: (k) => response.headers[k.toLowerCase()]
+    },
+    arrayBuffer: async () => buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength),
+    text: async () => buffer.toString('utf8'),
+    json: async () => JSON.parse(buffer.toString('utf8')),
+    body: response.data
+  };
+}
+
+/**
  * Cria uma instância File da biblioteca megajs
  * Conexão direta por padrão (ultra rápida e sem delay)
  * @param {string} url URL pública do MEGA
@@ -449,11 +489,14 @@ function safeDownload(file, options = {}, cb) {
         // Se a chamada direta falhar por erro de rede ou quota
         const nextProxy = getNextAvailableProxy();
         if (nextProxy) {
-          const agent = createAgent(nextProxy);
-          if (agent) {
+          try {
             console.warn(`[SmartProxy Fetch Fallback] Erro na requisição direta, tentando via proxy ${nextProxy}...`);
-            const proxyOpts = { ...(opts || {}), agent: () => agent };
-            return await origFetch.call(this, url, proxyOpts);
+            const proxyRes = await fetchWithProxyAxios(nextProxy, url, opts);
+            if (proxyRes && proxyRes.status === 200) {
+              return proxyRes;
+            }
+          } catch (e) {
+            markProxyCooldown(nextProxy, 1800);
           }
         }
         throw fetchErr;
@@ -462,16 +505,13 @@ function safeDownload(file, options = {}, cb) {
       // Se o status retornado for 509 ou qualquer código de cota/erro de servidor
       if (res && (res.status === 509 || res.status === 429)) {
         console.warn(`[SmartProxy Failover] Status ${res.status} detectado na URL ${url.substring(0, 50)}...! Rotacionando proxy do pool...`);
-        // Tenta proxies do pool verificado
+        // Tenta proxies do pool verificado usando Axios com HttpsProxyAgent (100% suportado em Node 18+)
         for (let attempt = 0; attempt < 8; attempt++) {
           const nextProxy = getNextAvailableProxy();
           if (!nextProxy) break;
-          const agent = createAgent(nextProxy);
-          if (!agent) continue;
 
           try {
-            const proxyOpts = { ...(opts || {}), agent: () => agent };
-            const proxyRes = await origFetch.call(this, url, proxyOpts);
+            const proxyRes = await fetchWithProxyAxios(nextProxy, url, opts);
             if (proxyRes && proxyRes.status === 200) {
               console.log(`[SmartProxy Bypass SUCESSO] Resposta 200 OK obtida via proxy ${nextProxy}!`);
               return proxyRes;

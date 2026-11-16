@@ -749,7 +749,7 @@
             if (canView) {
               openPlayer(item.id, encodeURIComponent(item.name), item.subtitleId || '');
             } else {
-              window.location.href = `/api/stream/${item.id}?download=1`;
+              triggerDownload(item.id, item.name, item.size);
             }
           };
 
