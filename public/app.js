@@ -1148,10 +1148,11 @@
         // Player de Vídeo com Autoplay Imediato e Retomada de Posição
         const video = document.createElement('video');
         video.id = 'playerTarget';
-        video.controls = true;
         video.autoplay = true;
         video.playsInline = true;
-        video.preload = 'auto';
+        video.setAttribute('playsinline', '');
+        video.setAttribute('webkit-playsinline', '');
+        video.preload = 'metadata';
         video.className = 'w-full max-h-[82vh] object-contain';
 
         let tracksHtml = '';
@@ -1190,6 +1191,9 @@
           autoplay: true,
           controls: playerControls,
           seekTime: 10,
+          hideControls: true,
+          clickToPlay: true,
+          playsinline: true,
           speed: { selected: preferredSpeed, options: [0.5, 0.75, 1, 1.25, 1.5, 2] }
         });
 

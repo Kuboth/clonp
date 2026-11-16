@@ -60,17 +60,40 @@
     .plyr--video {
       border-radius: 0.75rem;
       overflow: hidden;
+      width: 100% !important;
+      height: 100% !important;
+      max-height: 82vh;
     }
-    /* Em telas de celular/mobile, oculta a barra de volume do Plyr já que o volume é controlado pelos botões físicos */
+    /* Força os controles inferiores do Plyr a ficarem sempre posicionados e visíveis no mobile */
+    .plyr__controls {
+      z-index: 30 !important;
+      position: absolute !important;
+      bottom: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      padding: 10px 8px !important;
+      background: linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.85)) !important;
+      display: flex !important;
+      align-items: center !important;
+      gap: 6px !important;
+    }
+    /* No mobile, oculta apenas o slider de volume (que é controlado pelos botões físicos do aparelho) */
     @media (max-width: 640px) {
       .plyr__volume {
         display: none !important;
+      }
+      .plyr__controls button {
+        padding: 6px !important;
+      }
+      .plyr__controls button svg {
+        width: 18px !important;
+        height: 18px !important;
       }
     }
     /* Garante barra de progresso sempre visível, flexível e destacada */
     .plyr__progress__container {
       flex: 1 1 auto !important;
-      min-width: 80px !important;
+      min-width: 60px !important;
     }
     .plyr__progress {
       width: 100% !important;
@@ -119,7 +142,7 @@
         </div>
         <div class="flex items-center space-x-1.5">
           <span class="font-semibold text-sm tracking-tight text-zinc-100">clonp</span>
-          <span id="appVersionBadge" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-400 border border-zinc-800">v4.0</span>
+          <span id="appVersionBadge" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-400 border border-zinc-800">v4.1</span>
         </div>
       </div>
       
