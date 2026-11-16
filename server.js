@@ -12,7 +12,9 @@ const mime = require('mime-types');
 const archiver = require('archiver');
 const srt2vtt = require('srt-to-vtt');
 const axios = require('axios');
-const { File } = require('megajs');
+const https = require('https');
+const crypto = require('crypto');
+const { File, API } = require('megajs');
 const { HttpsProxyAgent } = require('https-proxy-agent');
 
 const app = express();
@@ -98,6 +100,8 @@ const fileInstancesCache = new Map();
 const folderCache = new Map();
 /** @type {Map<string, { ids: string[], zipName: string, expiresAt: number }>} */
 const batchTokenCache = new Map();
+/** @type {Map<string, { buffer: Buffer, contentType: string, cachedAt: number }>} */
+const thumbnailMemoryCache = new Map();
 
 // Rotina periódica a cada 15 minutos para remover itens expirados
 setInterval(() => {
@@ -115,6 +119,11 @@ setInterval(() => {
   for (const [key, val] of batchTokenCache.entries()) {
     if (now > val.expiresAt) {
       batchTokenCache.delete(key);
+    }
+  }
+  for (const [key, val] of thumbnailMemoryCache.entries()) {
+    if (now - val.cachedAt > CACHE_TTL_MS) {
+      thumbnailMemoryCache.delete(key);
     }
   }
 }, 15 * 60 * 1000);
@@ -294,6 +303,96 @@ function createMegaFileInstance(url) {
 }
 
 /**
+ * Converte base64 seguro para URL em Buffer
+ * @param {string} b64 
+ * @returns {Buffer}
+ */
+function base64ToBuffer(b64) {
+  let s = b64.replace(/-/g, '+').replace(/_/g, '/');
+  while (s.length % 4) s += '=';
+  return Buffer.from(s, 'base64');
+}
+
+/**
+ * Busca e descriptografa a miniatura nativa armazenada no MEGA (ufa / fa attribute)
+ * @param {string} thumbHandle Handle do atributo fa (ex: 2-NvguUU_08)
+ * @param {Buffer | string} fileKey Chave do arquivo (32 bytes)
+ * @returns {Promise<{ buffer: Buffer, contentType: string }>}
+ */
+async function fetchMegaNativeThumbnail(thumbHandle, fileKey) {
+  const api = new API(false);
+  const handleBuf = base64ToBuffer(thumbHandle);
+
+  const ufaRes = await new Promise((resolve, reject) => {
+    api.request({
+      a: 'ufa',
+      fah: thumbHandle,
+      ssl: 2,
+      r: 1
+    }, (err, res) => {
+      if (err) reject(err);
+      else resolve(res);
+    });
+  });
+
+  if (!ufaRes || !ufaRes.p) throw new Error('MEGA não retornou URL para o atributo ufa');
+
+  const u = new URL(ufaRes.p + '/0');
+  const rawData = await new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: u.hostname,
+      port: 443,
+      path: u.pathname,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'Content-Length': handleBuf.length
+      }
+    }, (res) => {
+      if (res.statusCode !== 200) return reject(new Error(`Storage retornou status HTTP ${res.statusCode}`));
+      const chunks = [];
+      res.on('data', d => chunks.push(d));
+      res.on('end', () => resolve(Buffer.concat(chunks)));
+    });
+    req.on('error', reject);
+    req.write(handleBuf);
+    req.end();
+  });
+
+  if (rawData.length <= 12) throw new Error('Payload de miniatura corrompido ou truncado');
+  const encData = rawData.slice(12);
+
+  const keyBuf = Buffer.isBuffer(fileKey) ? fileKey : Buffer.from(fileKey, 'base64');
+  const foldedKey = Buffer.alloc(16);
+  for (let i = 0; i < 16; i++) {
+    foldedKey[i] = keyBuf[i] ^ keyBuf[i + 16];
+  }
+
+  const decipher = crypto.createDecipheriv('aes-128-cbc', foldedKey, Buffer.alloc(16, 0));
+  decipher.setAutoPadding(false);
+  let decrypted = Buffer.concat([decipher.update(encData), decipher.final()]);
+
+  let contentType = 'image/jpeg';
+  if (decrypted.length > 12 && decrypted.slice(8, 12).toString('ascii') === 'WEBP') {
+    contentType = 'image/webp';
+    const riffLen = decrypted.readUInt32LE(4);
+    if (riffLen > 0 && riffLen + 8 <= decrypted.length) {
+      decrypted = decrypted.slice(0, riffLen + 8);
+    }
+  } else if (decrypted.length > 4 && decrypted[0] === 0x89 && decrypted[1] === 0x50) {
+    contentType = 'image/png';
+  } else {
+    // Trimming de padding para JPEG (termina com 0xFF, 0xD9)
+    const eoiIdx = decrypted.lastIndexOf(Buffer.from([0xff, 0xd9]));
+    if (eoiIdx > 0) {
+      decrypted = decrypted.slice(0, eoiIdx + 2);
+    }
+  }
+
+  return { buffer: decrypted, contentType };
+}
+
+/**
  * Gera um token imutável e autossuficiente contendo a chave e ID do arquivo.
  * Permite que downloads ativos continuem ou sejam retomados mesmo após o reinício do servidor (zero downtime).
  * @param {any} node 
@@ -305,7 +404,8 @@ function createStatelessFileId(node) {
       d: node.downloadId,
       k: node.key ? node.key.toString('base64') : null,
       n: node.name,
-      s: node.size
+      s: node.size,
+      fa: node.fa || undefined
     };
     return Buffer.from(JSON.stringify(meta)).toString('base64url');
   } catch (err) {
@@ -328,6 +428,7 @@ function resolveStatelessFile(token) {
       });
       file.name = decoded.n || 'arquivo';
       file.size = decoded.s || 0;
+      if (decoded.fa) file.fa = decoded.fa;
       return file;
     }
   } catch (err) {}
@@ -478,6 +579,40 @@ app.post('/api/inspect', inspectLimiter, async (req, res) => {
     const now = Date.now();
 
     if (fileOrFolder.directory) {
+      // Mapeamento dos atributos 'fa' (miniaturas/previews nativos do MEGA) para cada nó
+      try {
+        const rawNodes = await new Promise((resolve) => {
+          fileOrFolder.api.request({
+            a: 'f',
+            c: 1,
+            ca: 1,
+            r: 1,
+            _querystring: { n: fileOrFolder.downloadId }
+          }, (err, res) => {
+            if (!err && res && res.f) resolve(res.f);
+            else resolve([]);
+          });
+        });
+
+        const faMap = new Map();
+        for (const n of rawNodes) {
+          if (n.h && n.fa) faMap.set(n.h, n.fa);
+        }
+
+        const attachFaRecursive = (node) => {
+          const h = Array.isArray(node.downloadId) ? node.downloadId[1] : node.downloadId;
+          if (h && faMap.has(h)) {
+            node.fa = faMap.get(h);
+          }
+          if (node.children && Array.isArray(node.children)) {
+            node.children.forEach(attachFaRecursive);
+          }
+        };
+        attachFaRecursive(fileOrFolder);
+      } catch (faErr) {
+        console.warn('[MEGA Native Thumbnails] Não foi possível mapear fa:', faErr.message);
+      }
+
       const folderKey = `folder_${Date.now()}_${Math.random().toString(36).substring(7)}`;
       /** @type {TreeNode[]} */
       const allFiles = [];
@@ -501,6 +636,7 @@ app.post('/api/inspect', inspectLimiter, async (req, res) => {
           extension: ext,
           timestamp: timestamp,
           formattedDate: new Date(timestamp).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+          hasThumbnail: !!(node.fa && (node.fa.includes(':0*') || node.fa.includes(':1*'))),
           children: []
         };
 
@@ -710,6 +846,74 @@ app.get('/api/stream/:id', streamLimiter, async (req, res) => {
     if (!res.headersSent) {
       res.status(500).json({ error: 'Falha no download/stream: ' + (err.message || err) });
     }
+  }
+});
+
+// 2.1 Rota de Miniaturas Nativas do MEGA (Zero Quota / Ultra Rápido ~9KB)
+app.get('/api/thumbnail/:id', streamLimiter, async (req, res) => {
+  const { id } = req.params;
+  const isPreview = req.query.preview === '1'; // 0 = thumbnail (120x120), 1 = preview (maior resolução)
+
+  // 1. Verifica cache em memória RAM
+  const cacheKey = `${id}_${isPreview ? '1' : '0'}`;
+  const memoryHit = thumbnailMemoryCache.get(cacheKey);
+  if (memoryHit && memoryHit.buffer) {
+    res.setHeader('Content-Type', memoryHit.contentType || 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+    return res.end(memoryHit.buffer);
+  }
+
+  let file = null;
+  const cached = fileInstancesCache.get(id);
+  if (cached && cached.instance) {
+    file = cached.instance;
+  } else {
+    file = resolveStatelessFile(id);
+  }
+
+  if (!file) {
+    return res.status(404).send('Nó não encontrado.');
+  }
+
+  // Se o arquivo tiver o atributo 'fa' mapeado
+  const faString = file.fa || (file.attributes && file.attributes.fa);
+  if (!faString || typeof faString !== 'string') {
+    return res.status(404).send('Miniatura não disponível para este arquivo.');
+  }
+
+  try {
+    const parts = faString.split('/');
+    let targetPart;
+    if (isPreview) {
+      targetPart = parts.find(p => p.includes(':1*')) || parts.find(p => p.includes(':0*')) || parts[0];
+    } else {
+      targetPart = parts.find(p => p.includes(':0*')) || parts[0];
+    }
+
+    if (!targetPart || !targetPart.includes('*')) {
+      return res.status(404).send('Formato do atributo fa inválido.');
+    }
+
+    const thumbHandle = targetPart.split('*')[1];
+    const thumbData = await fetchMegaNativeThumbnail(thumbHandle, file.key);
+
+    // Salva em cache de memória (TTL de 2 horas)
+    if (thumbData && thumbData.buffer) {
+      thumbnailMemoryCache.set(cacheKey, {
+        buffer: thumbData.buffer,
+        contentType: thumbData.contentType,
+        cachedAt: Date.now()
+      });
+
+      res.setHeader('Content-Type', thumbData.contentType);
+      res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+      return res.end(thumbData.buffer);
+    }
+
+    return res.status(404).send('Falha ao processar miniatura.');
+  } catch (err) {
+    console.error(`[Thumbnail Endpoint] Erro ao extrair miniatura do nó ${file.name}:`, err.message);
+    return res.status(500).send('Erro ao buscar miniatura.');
   }
 });
 

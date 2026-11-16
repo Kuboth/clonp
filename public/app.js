@@ -808,22 +808,43 @@
           };
 
           let thumbnailHtml = '';
+          const nativeThumbUrl = `${window.location.origin}/api/thumbnail/${item.id}`;
+          const nativePreviewUrl = `${window.location.origin}/api/thumbnail/${item.id}?preview=1`;
+
           if (isImg) {
+            // Se tiver miniatura nativa no MEGA, usa a miniatura de ~9KB (ou preview de 30KB) em vez do arquivo original pesado
+            const imgSourceUrl = item.hasThumbnail ? nativePreviewUrl : fullStreamUrl;
             thumbnailHtml = `
               <div class="w-full h-28 rounded-lg overflow-hidden bg-zinc-950 border border-zinc-800/90 flex items-center justify-center mb-2 relative group-hover:border-zinc-700 transition">
-                <img data-src="${fullStreamUrl}" alt="${item.name}" loading="lazy" decoding="async" class="lazy-image-target w-full h-full object-cover transition-opacity duration-300 opacity-0" onload="this.classList.remove('opacity-0')" onerror="this.parentElement.innerHTML='<div class=\\'flex flex-col items-center justify-center text-zinc-500 text-[10px]\\'><i class=\\'fa-solid fa-image text-xl mb-1 text-zinc-600\\'></i><span>IMG</span></div>'">
+                <img data-src="${imgSourceUrl}" alt="${item.name}" loading="lazy" decoding="async" class="lazy-image-target w-full h-full object-cover transition-opacity duration-300 opacity-0" onload="this.classList.remove('opacity-0')" onerror="if(this.dataset.triedOriginal!=='1'){this.dataset.triedOriginal='1';this.src='${fullStreamUrl}';}else{this.parentElement.innerHTML='<div class=\\'flex flex-col items-center justify-center text-zinc-500 text-[10px]\\'><i class=\\'fa-solid fa-image text-xl mb-1 text-zinc-600\\'></i><span>IMG</span></div>';}">
                 <div class="absolute bottom-1 right-1 bg-black/70 backdrop-blur-sm px-1 py-0.5 rounded text-[9px] text-zinc-300 font-mono leading-none">
                   IMG
                 </div>
               </div>`;
           } else if (isVid) {
-            thumbnailHtml = `
-              <div class="video-thumb-container w-full h-28 rounded-lg overflow-hidden bg-zinc-950 border border-zinc-800/90 flex flex-col items-center justify-center mb-2 relative group-hover:border-zinc-700 transition" data-video-id="${item.id}">
-                <div class="w-9 h-9 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 flex items-center justify-center mb-1 group-hover:scale-110 transition">
-                  <i class="fa-solid fa-play text-xs"></i>
-                </div>
-                <span class="text-[9px] text-zinc-500 uppercase font-mono tracking-wider">${item.extension || 'VIDEO'}</span>
-              </div>`;
+            // Se tiver miniatura nativa no MEGA, carrega direto por imagem nativa instantânea!
+            if (item.hasThumbnail) {
+              thumbnailHtml = `
+                <div class="w-full h-28 rounded-lg overflow-hidden bg-zinc-950 border border-zinc-800/90 flex items-center justify-center mb-2 relative group-hover:border-zinc-700 transition">
+                  <img data-src="${nativeThumbUrl}" alt="${item.name}" loading="lazy" decoding="async" class="lazy-image-target w-full h-full object-cover transition-opacity duration-300 opacity-0" onload="this.classList.remove('opacity-0')" onerror="this.parentElement.outerHTML='<div class=\\'video-thumb-container w-full h-28 rounded-lg overflow-hidden bg-zinc-950 border border-zinc-800/90 flex flex-col items-center justify-center mb-2 relative group-hover:border-zinc-700 transition\\' data-video-id=\\'${item.id}\\'><div class=\\'w-9 h-9 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 flex items-center justify-center mb-1\\'><i class=\\'fa-solid fa-play text-xs\\'></i></div><span class=\\'text-[9px] text-zinc-500 uppercase font-mono\\'>VIDEO</span></div>';">
+                  <div class="absolute inset-0 bg-black/20 flex items-center justify-center group-hover:bg-black/10 transition">
+                    <div class="w-8 h-8 rounded-full bg-black/60 backdrop-blur-sm border border-white/20 text-white flex items-center justify-center pl-0.5 group-hover:scale-110 transition">
+                      <i class="fa-solid fa-play text-[10px]"></i>
+                    </div>
+                  </div>
+                  <div class="absolute bottom-1 right-1 bg-black/75 backdrop-blur-sm px-1 py-0.5 rounded text-[8px] text-zinc-300 font-mono leading-none border border-zinc-700/60">
+                    ${item.extension ? item.extension.toUpperCase() : 'VIDEO'}
+                  </div>
+                </div>`;
+            } else {
+              thumbnailHtml = `
+                <div class="video-thumb-container w-full h-28 rounded-lg overflow-hidden bg-zinc-950 border border-zinc-800/90 flex flex-col items-center justify-center mb-2 relative group-hover:border-zinc-700 transition" data-video-id="${item.id}">
+                  <div class="w-9 h-9 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 flex items-center justify-center mb-1 group-hover:scale-110 transition">
+                    <i class="fa-solid fa-play text-xs"></i>
+                  </div>
+                  <span class="text-[9px] text-zinc-500 uppercase font-mono tracking-wider">${item.extension || 'VIDEO'}</span>
+                </div>`;
+            }
           } else if (isPdf(item.name)) {
             thumbnailHtml = `
               <div class="w-full h-28 rounded-lg bg-zinc-950 border border-zinc-800/90 flex flex-col items-center justify-center mb-2 relative group-hover:border-zinc-700 transition">
@@ -900,7 +921,14 @@
 
           const previewIconOrThumb = isImg 
             ? `<div class="w-7 h-7 rounded-md overflow-hidden bg-zinc-950 border border-zinc-800 flex-shrink-0">
-                 <img data-src="${fullStreamUrl}" alt="${item.name}" loading="lazy" decoding="async" class="lazy-image-target w-full h-full object-cover transition-opacity duration-300 opacity-0" onload="this.classList.remove('opacity-0')">
+                 <img data-src="${item.hasThumbnail ? nativeThumbUrl : fullStreamUrl}" alt="${item.name}" loading="lazy" decoding="async" class="lazy-image-target w-full h-full object-cover transition-opacity duration-300 opacity-0" onload="this.classList.remove('opacity-0')">
+               </div>`
+            : (isVid && item.hasThumbnail)
+            ? `<div class="w-7 h-7 rounded-md overflow-hidden bg-zinc-950 border border-zinc-800 flex-shrink-0 relative">
+                 <img data-src="${nativeThumbUrl}" alt="${item.name}" loading="lazy" decoding="async" class="lazy-image-target w-full h-full object-cover transition-opacity duration-300 opacity-0" onload="this.classList.remove('opacity-0')">
+                 <div class="absolute inset-0 bg-black/30 flex items-center justify-center">
+                   <i class="fa-solid fa-play text-[8px] text-white"></i>
+                 </div>
                </div>`
             : `<div class="w-7 h-7 rounded-md bg-zinc-900 border border-zinc-800 flex items-center justify-center flex-shrink-0">
                  <i class="fa-solid ${iconClass} text-xs"></i>
