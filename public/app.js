@@ -332,58 +332,10 @@
       }
       fileName = fileName || 'download';
 
-      // Download Direto para Disco com StreamSaver.js
+      // Download Direto e Contínuo para o Disco com StreamSaver.js (Single Continuous Stream)
       if (window.streamSaver && window.WritableStream) {
         try {
-          // Arquivos grandes (> 10MB) com tamanho conhecido: DOWNLOAD MULTI-THREAD ACELERADO (3 streams paralelas estilo IDM)
-          const MIN_SIZE_FOR_CHUNKING = 10 * 1024 * 1024; // 10MB
-          if (fileSize && fileSize > MIN_SIZE_FOR_CHUNKING) {
-            showToast('Download acelerado Turbo (Multi-Thread) iniciado...');
-            const fileStream = streamSaver.createWriteStream(fileName, {
-              size: fileSize
-            });
-            const writer = fileStream.getWriter();
-
-            const NUM_CHUNKS = 3; // 3 partes simultâneas
-            const chunkSize = Math.ceil(fileSize / NUM_CHUNKS);
-            const parts = [];
-
-            for (let i = 0; i < NUM_CHUNKS; i++) {
-              const start = i * chunkSize;
-              const end = Math.min((i + 1) * chunkSize - 1, fileSize - 1);
-              if (start <= end) {
-                parts.push({ index: i, start, end });
-              }
-            }
-
-            // Inicia streams paralelas concorrentes
-            const streamPromises = parts.map(async (part) => {
-              const partRes = await fetch(`/api/stream/${id}?download=1`, {
-                headers: { 'Range': `bytes=${part.start}-${part.end}` }
-              });
-              if (!partRes.ok) throw new Error(`Falha na thread ${part.index}: status ${partRes.status}`);
-              return { ...part, reader: partRes.body.getReader() };
-            });
-
-            const activeThreads = await Promise.all(streamPromises);
-
-            // Escreve sequencialmente no disco à medida que cada thread entrega seus blocos
-            for (const thread of activeThreads) {
-              while (true) {
-                const { done, value } = await thread.reader.read();
-                if (done) break;
-                if (value && value.length > 0) {
-                  await writer.write(value);
-                }
-              }
-            }
-
-            await writer.close();
-            return showToast('Download acelerado concluído com sucesso!');
-          }
-
-          // Para arquivos menores ou com tamanho desconhecido: streaming simples direto pro disco
-          showToast('Iniciando download com StreamSaver (direto pro disco)...');
+          showToast('Iniciando download direto para o disco (StreamSaver)...');
           const response = await fetch(url);
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
@@ -392,27 +344,30 @@
             size: size ? parseInt(size, 10) : undefined
           });
 
-          // Pipe nativo da ReadableStream da resposta direto para o WritableStream do disco
-          if (window.WritableStream && response.body.pipeTo) {
+          // Pipe nativo direto do response body para o disco
+          if (response.body.pipeTo) {
             await response.body.pipeTo(fileStream);
-            return showToast('Download concluído!');
+            return showToast('Download concluído com sucesso!');
           }
 
           const writer = fileStream.getWriter();
           const reader = response.body.getReader();
-          const pump = () => reader.read().then(res => 
-            res.done ? writer.close() : writer.write(res.value).then(pump)
-          );
-          await pump();
-          return showToast('Download concluído!');
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (value && value.length > 0) {
+              await writer.write(value);
+            }
+          }
+          await writer.close();
+          return showToast('Download concluído com sucesso!');
         } catch (err) {
           console.warn('[StreamSaver] Fallback para download nativo:', err);
-          // Em caso de cancelamento do usuário ou erro de ServiceWorker, segue com fallback nativo
         }
       }
 
       // Fallback nativo do navegador via link <a>
-      showToast('Iniciando transferência...');
+      showToast('Iniciando transferência no navegador...');
       const a = document.createElement('a');
       a.href = url;
       a.setAttribute('download', fileName);
