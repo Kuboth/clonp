@@ -128,10 +128,12 @@ let proxyPointer = 0;
 const cooldownProxies = new Map();
 
 /**
- * Busca e valida proxies públicos rápidos e funcionais para o MEGA
+ * Busca e valida proxies públicos rápidos e funcionais para o MEGA a partir de múltiplos agregadores
+ * Incluindo: Proxifly (4.000+ proxies), TheSpeedX (2.500+ proxies) e monosans (500+ proxies)
  */
 async function fetchAndVerifyProxies() {
   const sources = [
+    'https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/protocols/http/data.txt',
     'https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/http.txt',
     'https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt'
   ];
@@ -152,17 +154,17 @@ async function fetchAndVerifyProxies() {
 
       if (data && data.length > 50) {
         const lines = data.split('\n')
-          .map(l => l.trim())
+          .map(l => l.trim().replace(/^https?:\/\//, ''))
           .filter(l => l && /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$/.test(l));
         rawIps.push(...lines);
       }
     } catch (e) {}
   }
 
-  const unique = Array.from(new Set(rawIps)).sort(() => Math.random() - 0.5).slice(0, 40);
+  const unique = Array.from(new Set(rawIps)).sort(() => Math.random() - 0.5).slice(0, 60);
   if (unique.length === 0) return [];
 
-  // Validação ultra-rápida (2.5s) testando handshake com a API do MEGA
+  // Validação em lote concorrente testando handshake rápido com a API do MEGA
   const verified = await Promise.all(unique.map(async (ipPort) => {
     try {
       const agent = new HttpsProxyAgent(`http://${ipPort}`);
@@ -187,7 +189,7 @@ async function fetchAndVerifyProxies() {
   }));
 
   const active = verified.filter(Boolean);
-  console.log(`[SmartProxy] ${active.length} proxies verificados e prontos para furar cota do MEGA.`);
+  console.log(`[SmartProxy Mubeng-Engine] ${active.length} proxies ativos e testados no MEGA.`);
   return active;
 }
 
