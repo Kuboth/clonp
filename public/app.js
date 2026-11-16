@@ -317,59 +317,25 @@
       });
     };
 
-    window.triggerDownload = async (id, optionalFileName, optionalSize) => {
+    window.triggerDownload = (id, optionalFileName, optionalSize) => {
       const url = `/api/stream/${id}?download=1`;
 
-      // Localiza o nome do arquivo a partir dos dados em memória se não fornecido
       let fileName = optionalFileName;
-      let fileSize = optionalSize;
       if (!fileName && currentFolderNode && currentFolderNode.children) {
         const item = currentFolderNode.children.find(c => c.id === id);
         if (item) {
           fileName = item.name;
-          fileSize = item.size;
         }
       }
       fileName = fileName || 'download';
 
-      // Se a biblioteca StreamSaver estiver disponível e o navegador suportar WritableStream,
-      // salva diretamente no disco sem consumir memória RAM (ideal para vídeos e arquivos pesados)
-      if (window.streamSaver && window.WritableStream) {
-        try {
-          showToast('Iniciando download com StreamSaver (direto pro disco)...');
-          const response = await fetch(url);
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-          const size = fileSize || response.headers.get('content-length');
-          const fileStream = streamSaver.createWriteStream(fileName, {
-            size: size ? parseInt(size, 10) : undefined
-          });
-
-          // Pipe nativo da ReadableStream da resposta direto para o WritableStream do disco
-          if (window.WritableStream && response.body.pipeTo) {
-            return await response.body.pipeTo(fileStream);
-          }
-
-          const writer = fileStream.getWriter();
-          const reader = response.body.getReader();
-          const pump = () => reader.read().then(res => 
-            res.done ? writer.close() : writer.write(res.value).then(pump)
-          );
-          return await pump();
-        } catch (err) {
-          console.warn('[StreamSaver] Fallback para download nativo:', err);
-          // Em caso de cancelamento do usuário ou erro de ServiceWorker, segue com fallback nativo
-        }
-      }
-
-      // Fallback nativo do navegador via link <a>
-      showToast('Iniciando transferência...');
+      showToast('Iniciando transferência direta...');
       const a = document.createElement('a');
       a.href = url;
       a.setAttribute('download', fileName);
       document.body.appendChild(a);
       a.click();
-      setTimeout(() => document.body.removeChild(a), 100);
+      setTimeout(() => document.body.removeChild(a), 150);
     };
 
     window.downloadSelectedBatch = async () => {
@@ -393,33 +359,13 @@
 
         const data = await res.json();
         if (data.downloadUrl) {
-          const zipName = 'selecao_clonp.zip';
-
-          // Tenta streaming direto do ZIP para o disco via StreamSaver
-          if (window.streamSaver && window.WritableStream) {
-            try {
-              showToast('Baixando pacote direto para o disco...');
-              const zipResponse = await fetch(data.downloadUrl);
-              if (zipResponse.ok) {
-                const fileStream = streamSaver.createWriteStream(zipName);
-                if (zipResponse.body.pipeTo) {
-                  await zipResponse.body.pipeTo(fileStream);
-                  return showToast('Download do pacote concluído!');
-                }
-              }
-            } catch (err) {
-              console.warn('[StreamSaver Batch] Fallback para navegador:', err);
-            }
-          }
-
-          // Fallback nativo
           const a = document.createElement('a');
           a.href = data.downloadUrl;
-          a.setAttribute('download', zipName);
+          a.setAttribute('download', 'selecao_clonp.zip');
           document.body.appendChild(a);
           a.click();
           setTimeout(() => document.body.removeChild(a), 200);
-          showToast('Download iniciado!');
+          showToast('Download do pacote iniciado!');
         } else {
           throw new Error('URL de download inválida.');
         }
