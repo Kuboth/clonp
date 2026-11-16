@@ -25,74 +25,6 @@ const PORT = process.env.PORT || 3000;
 const globalHttpAgent = new http.Agent({ keepAlive: true, maxSockets: 50 });
 const globalHttpsAgent = new https.Agent({ keepAlive: true, maxSockets: 50 });
 
-/**
- * Custom Fetch Adapter para a biblioteca megajs e conexões HTTP/HTTPS.
- * Em Node.js 18+, o globalThis.fetch nativo (undici) ignora totalmente http.Agent e https.Agent.
- * Este adapter garante suporte a Keep-Alive, streaming e roteamento através de Proxies (HttpsProxyAgent).
- */
-function megaCustomFetch(url, opts = {}) {
-  return new Promise((resolve, reject) => {
-    try {
-      const parsed = new URL(url);
-      const isHttps = parsed.protocol === 'https:';
-      const mod = isHttps ? https : http;
-
-      let agent = opts.agent;
-      if (typeof agent === 'function') {
-        agent = agent(parsed);
-      }
-      if (!agent) {
-        agent = isHttps ? globalHttpsAgent : globalHttpAgent;
-      }
-
-      const headers = { ...(opts.headers || {}) };
-      if (opts.body && !headers['content-length'] && !headers['Content-Length']) {
-        headers['Content-Length'] = Buffer.byteLength(opts.body);
-      }
-
-      const req = mod.request(parsed, {
-        method: opts.method || 'GET',
-        headers,
-        agent,
-        timeout: 25000
-      }, (res) => {
-        const chunks = [];
-        res.on('data', c => chunks.push(c));
-        res.on('end', () => {
-          const fullBuf = Buffer.concat(chunks);
-          resolve({
-            status: res.statusCode,
-            ok: res.statusCode >= 200 && res.statusCode < 300,
-            headers: {
-              get: (k) => res.headers[k.toLowerCase()]
-            },
-            arrayBuffer: async () => fullBuf.buffer.slice(fullBuf.byteOffset, fullBuf.byteOffset + fullBuf.byteLength),
-            text: async () => fullBuf.toString('utf8'),
-            json: async () => JSON.parse(fullBuf.toString('utf8')),
-            body: res
-          });
-        });
-      });
-
-      req.on('timeout', () => {
-        req.destroy(new Error('Request timeout'));
-      });
-
-      req.on('error', reject);
-
-      if (opts.body) {
-        req.write(opts.body);
-      }
-      req.end();
-    } catch (e) {
-      reject(e);
-    }
-  });
-}
-
-// Configura o fetchModule global do megajs com suporte a agentes e proxies
-API.fetchModule = megaCustomFetch;
-
 // Configuração de Proxy confiável (Render / PaaS)
 app.set('trust proxy', 1);
 
@@ -608,13 +540,13 @@ function safeDownload(file, options = {}, cb) {
     setTimeout(retryCb, backoff);
   };
 
-  // Configuração inteligente turbo com conexões paralelas e blocos balanceados
+  // Configuração inteligente turbo com conexões paralelas e blocos expandidos (Multi-Connection Engine)
   const speedOpts = {
     forceHttps: true,
-    maxConnections: 2,               // 2 conexões paralelas mantêm estabilidade perfeita contra descarte de socket
-    initialChunkSize: 256 * 1024,    // 256KB inicial
-    chunkSizeIncrement: 256 * 1024,  // Incremento suave
-    maxChunkSize: 1024 * 1024,       // 1MB max por chunk (estabilidade comprovada)
+    maxConnections: 4,               // Aumentado de 2 para 4 conexões paralelas ao MEGA
+    initialChunkSize: 512 * 1024,    // Chunks iniciais de 512KB
+    chunkSizeIncrement: 512 * 1024,  // Incremento rápido
+    maxChunkSize: 2 * 1024 * 1024,   // Teto de 2MB por chunk (ótimo throughput sem estourar RAM)
     handleRetries: smartHandleRetries,
     ...options
   };
