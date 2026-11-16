@@ -320,22 +320,23 @@
     window.triggerDownload = async (id, optionalFileName, optionalSize) => {
       const url = `/api/stream/${id}?download=1`;
 
-      // Localiza o nome e tamanho do arquivo a partir dos dados em memória se não fornecido
+      // Localiza o nome do arquivo a partir dos dados em memória se não fornecido
       let fileName = optionalFileName;
       let fileSize = optionalSize;
-      if (currentFolderNode && currentFolderNode.children) {
+      if (!fileName && currentFolderNode && currentFolderNode.children) {
         const item = currentFolderNode.children.find(c => c.id === id);
         if (item) {
-          fileName = fileName || item.name;
-          fileSize = fileSize || item.size;
+          fileName = item.name;
+          fileSize = item.size;
         }
       }
       fileName = fileName || 'download';
 
-      // Download Direto e Contínuo para o Disco com StreamSaver.js (Single Continuous Stream)
+      // Se a biblioteca StreamSaver estiver disponível e o navegador suportar WritableStream,
+      // salva diretamente no disco sem consumir memória RAM (ideal para vídeos e arquivos pesados)
       if (window.streamSaver && window.WritableStream) {
         try {
-          showToast('Iniciando download direto para o disco (StreamSaver)...');
+          showToast('Iniciando download com StreamSaver (direto pro disco)...');
           const response = await fetch(url);
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
@@ -344,30 +345,25 @@
             size: size ? parseInt(size, 10) : undefined
           });
 
-          // Pipe nativo direto do response body para o disco
-          if (response.body.pipeTo) {
-            await response.body.pipeTo(fileStream);
-            return showToast('Download concluído com sucesso!');
+          // Pipe nativo da ReadableStream da resposta direto para o WritableStream do disco
+          if (window.WritableStream && response.body.pipeTo) {
+            return await response.body.pipeTo(fileStream);
           }
 
           const writer = fileStream.getWriter();
           const reader = response.body.getReader();
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            if (value && value.length > 0) {
-              await writer.write(value);
-            }
-          }
-          await writer.close();
-          return showToast('Download concluído com sucesso!');
+          const pump = () => reader.read().then(res => 
+            res.done ? writer.close() : writer.write(res.value).then(pump)
+          );
+          return await pump();
         } catch (err) {
           console.warn('[StreamSaver] Fallback para download nativo:', err);
+          // Em caso de cancelamento do usuário ou erro de ServiceWorker, segue com fallback nativo
         }
       }
 
       // Fallback nativo do navegador via link <a>
-      showToast('Iniciando transferência no navegador...');
+      showToast('Iniciando transferência...');
       const a = document.createElement('a');
       a.href = url;
       a.setAttribute('download', fileName);

@@ -12,7 +12,6 @@ const mime = require('mime-types');
 const archiver = require('archiver');
 const srt2vtt = require('srt-to-vtt');
 const axios = require('axios');
-const http = require('http');
 const https = require('https');
 const crypto = require('crypto');
 const { File, API } = require('megajs');
@@ -20,10 +19,6 @@ const { HttpsProxyAgent } = require('https-proxy-agent');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-// Pool de agentes HTTP/HTTPS persistentes com Keep-Alive para máxima velocidade
-const globalHttpAgent = new http.Agent({ keepAlive: true, maxSockets: 50 });
-const globalHttpsAgent = new https.Agent({ keepAlive: true, maxSockets: 50 });
 
 // Configuração de Proxy confiável (Render / PaaS)
 app.set('trust proxy', 1);
@@ -304,12 +299,7 @@ function markProxyCooldown(proxyUrl, cooldownSeconds = 1800) {
  * @returns {any}
  */
 function createMegaFileInstance(url) {
-  const f = File.fromURL(url);
-  if (f && f.api) {
-    f.api.httpAgent = globalHttpAgent;
-    f.api.httpsAgent = globalHttpsAgent;
-  }
-  return f;
+  return File.fromURL(url);
 }
 
 /**
@@ -330,10 +320,7 @@ function base64ToBuffer(b64) {
  * @returns {Promise<{ buffer: Buffer, contentType: string }>}
  */
 async function fetchMegaNativeThumbnail(thumbHandle, fileKey) {
-  const api = new API(false, {
-    httpAgent: globalHttpAgent,
-    httpsAgent: globalHttpsAgent
-  });
+  const api = new API(false);
   const handleBuf = base64ToBuffer(thumbHandle);
 
   const ufaRes = await new Promise((resolve, reject) => {
@@ -540,13 +527,13 @@ function safeDownload(file, options = {}, cb) {
     setTimeout(retryCb, backoff);
   };
 
-  // Configuração inteligente turbo com conexões paralelas e blocos expandidos (Multi-Connection Engine)
+  // Configuração inteligente com forceHttps para compatibilidade total com túneis HTTPS e proxies
   const speedOpts = {
     forceHttps: true,
-    maxConnections: 4,               // Aumentado de 2 para 4 conexões paralelas ao MEGA
-    initialChunkSize: 512 * 1024,    // Chunks iniciais de 512KB
-    chunkSizeIncrement: 512 * 1024,  // Incremento rápido
-    maxChunkSize: 2 * 1024 * 1024,   // Teto de 2MB por chunk (ótimo throughput sem estourar RAM)
+    maxConnections: 2,
+    initialChunkSize: 256 * 1024,
+    chunkSizeIncrement: 256 * 1024,
+    maxChunkSize: 1024 * 1024,
     handleRetries: smartHandleRetries,
     ...options
   };
