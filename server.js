@@ -173,28 +173,22 @@ async function fetchAndVerifyProxies() {
   const unique = Array.from(new Set(rawIps)).sort(() => Math.random() - 0.5).slice(0, 60);
   if (unique.length === 0) return [];
 
-  // Validação em lote concorrente testando handshake rápido com a API do MEGA
+  // Validação em lote concorrente testando handshake rápido com a API do MEGA via Axios
   const verified = await Promise.all(unique.map(async (ipPort) => {
     try {
       const agent = new HttpsProxyAgent(`http://${ipPort}`);
-      const f = File.fromURL('https://mega.nz/file/qsQDWaKY#z8fBh50uxSn4oM0HkpMSKg');
-      f.api.httpAgent = agent;
-      f.api.httpsAgent = agent;
-
-      return await new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), 2500);
-        f.api.fetch('https://g.api.mega.co.nz/cs').then(r => {
-          clearTimeout(timer);
-          if (r.status === 200 || r.status === 400) resolve(`http://${ipPort}`);
-          else resolve(null);
-        }).catch(() => {
-          clearTimeout(timer);
-          resolve(null);
-        });
+      const r = await axios.post('https://g.api.mega.co.nz/cs', '[]', {
+        headers: { 'Content-Type': 'application/json' },
+        httpsAgent: agent,
+        httpAgent: agent,
+        timeout: 3000,
+        validateStatus: () => true
       });
-    } catch (e) {
-      return null;
-    }
+      if (r && (r.status === 200 || r.status === 400)) {
+        return `http://${ipPort}`;
+      }
+    } catch (e) {}
+    return null;
   }));
 
   const active = verified.filter(Boolean);
@@ -314,7 +308,7 @@ async function fetchWithProxyAxios(proxyUrl, targetUrl, opts = {}) {
     httpAgent: agent,
     data: opts.body,
     responseType: 'arraybuffer',
-    timeout: 12000,
+    timeout: 8000,
     validateStatus: () => true
   });
 
