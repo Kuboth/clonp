@@ -31,16 +31,6 @@ Acesse no navegador: `http://localhost:3000`
 
 ---
 
-### Variáveis de Ambiente (Opcional)
-
-| Variável | Descrição |
-| :--- | :--- |
-| `PORT` | Porta do servidor HTTP (padrão: `3000`). |
-| `CUSTOM_PROXIES` | Lista de proxies dedicados separados por vírgula (`http://ip:porta` ou `http://user:pass@ip:porta`). |
-| `RENDER_EXTERNAL_URL` | URL pública da aplicação (mantém a instância ativa no Render). |
-
----
-
 ### Licença
 
 MIT
