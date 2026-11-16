@@ -352,15 +352,20 @@
 
           const writer = fileStream.getWriter();
           const reader = response.body.getReader();
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            if (value && value.length > 0) {
-              await writer.write(value);
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              if (value && value.length > 0) {
+                await writer.write(value);
+              }
             }
+            await writer.close();
+            return showToast('Download concluído com sucesso!');
+          } catch (writeErr) {
+            try { await writer.abort(writeErr); } catch (e) {}
+            throw writeErr;
           }
-          await writer.close();
-          return showToast('Download concluído com sucesso!');
         } catch (err) {
           console.warn('[StreamSaver] Fallback para download nativo:', err);
         }
